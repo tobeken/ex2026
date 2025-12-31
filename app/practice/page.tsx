@@ -21,6 +21,7 @@ const practiceTask = {
 
 export default function PracticePage() {
   const router = useRouter();
+  const [participantId, setParticipantId] = useState("");
   const [stage, setStage] = useState<"survey" | "voice" | "post">("survey");
   const [sessionActive, setSessionActive] = useState(false);
   const [voiceCompleted, setVoiceCompleted] = useState(false);
@@ -34,21 +35,59 @@ export default function PracticePage() {
   const canStart = !sessionActive && stage === "voice";
 
   useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = window.sessionStorage.getItem("participantId") || "";
+      setParticipantId(stored);
+    }
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
   }, []);
+
+  const submitSurvey = async (payload: {
+    stage: "pre" | "post";
+    answers: any;
+  }) => {
+    if (!participantId) return;
+    try {
+      const res = await fetch("/api/surveys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          participantId,
+          session: "practice",
+          taskId: "PRACTICE",
+          stage: payload.stage,
+          condition: practiceTask.condition,
+          answers: payload.answers,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.error("practice survey submit failed", err);
+      }
+    } catch (e) {
+      console.error("practice survey submit error", e);
+    }
+  };
 
   const handleSaveNote = () => {
     setNoteSaved(note.trim().length > 0);
     toast.success("保存しました");
   };
 
-  const handleSurveySubmit = () => {
+  const handleSurveySubmit = (answers: Record<string, string>) => {
     if (!noteSaved) {
       alert("自由記述を保存してください。");
       return;
     }
+    submitSurvey({
+      stage: "pre",
+      answers: {
+        note,
+        ...answers,
+      },
+    });
     setStage("voice");
   };
 
@@ -88,6 +127,13 @@ export default function PracticePage() {
       alert("Q1とQ2に回答してください。");
       return;
     }
+    submitSurvey({
+      stage: "post",
+      answers: {
+        q1: postAnswers.q1,
+        q2: postAnswers.q2,
+      },
+    });
     setPostCompleted(true);
     if (typeof window !== "undefined") {
       window.sessionStorage.setItem(STORAGE_KEY_PRACTICE_DONE, "true");
@@ -97,6 +143,13 @@ export default function PracticePage() {
 
   return (
     <div className="w-full max-w-2xl mx-auto px-4 py-10 space-y-6">
+      {participantId && (
+        <div className="flex justify-end">
+          <Badge variant="secondary" className="px-3 py-1">
+            ID: {participantId}
+          </Badge>
+        </div>
+      )}
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold">練習タスク</h1>
         <p className="text-sm text-muted-foreground">

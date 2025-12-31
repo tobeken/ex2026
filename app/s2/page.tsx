@@ -194,6 +194,33 @@ export default function Session2Page() {
 
   const canStart = stage === "voice" && audioFinished && !audioPlaying;
 
+  const submitSurvey = async (payload: {
+    stage: "post" | "followup";
+    answers: any;
+  }) => {
+    if (!participantId || !currentTask) return;
+    try {
+      const res = await fetch("/api/surveys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          participantId,
+          session: "s2",
+          taskId: currentTask.taskId,
+          stage: payload.stage,
+          condition: currentTask.condition,
+          answers: payload.answers,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.error("s2 survey submit failed", err);
+      }
+    } catch (e) {
+      console.error("s2 survey submit error", e);
+    }
+  };
+
   const handlePlayAudio = () => {
     setAudioPlaying(true);
     setAudioFinished(false);
@@ -241,6 +268,10 @@ export default function Session2Page() {
     const next = [...followupNotes];
     next[currentTaskIndex] = followupDraft;
     setFollowupNotes(next);
+    submitSurvey({
+      stage: "followup",
+      answers: { followup: followupDraft },
+    });
     setIsFollowupOpen(false);
   };
 
@@ -272,6 +303,10 @@ export default function Session2Page() {
       alert("すべての項目に回答してください。");
       return;
     }
+    submitSurvey({
+      stage: "post",
+      answers: ans,
+    });
     const completedNext = [...postCompleted];
     completedNext[currentTaskIndex] = true;
     setPostCompleted(completedNext);
@@ -304,11 +339,23 @@ export default function Session2Page() {
 
   return (
     <div className="w-full max-w-3xl mx-auto px-4 py-10 space-y-6">
+      {participantId && (
+        <div className="flex justify-end">
+          <Badge variant="secondary" className="px-3 py-1">
+            ID: {participantId}
+          </Badge>
+        </div>
+      )}
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold">Session 2</h1>
         <p className="text-sm text-muted-foreground">
           2回目（3タスク連続）。音声再生 → Start/Stop → Next の流れです。ID入力は不要です。
         </p>
+        {participantId && (
+          <p className="text-xs text-muted-foreground">
+            参加者ID: <span className="font-semibold text-foreground">{participantId}</span>
+          </p>
+        )}
       </div>
 
       <Card className="p-4 space-y-3">

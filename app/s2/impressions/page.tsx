@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -8,19 +8,54 @@ import { useRouter } from "next/navigation";
 
 export default function ImpressionsPage() {
   const router = useRouter();
+  const [participantId, setParticipantId] = useState("");
   const [notes, setNotes] = useState({
     t1: "",
     t2: "",
     t3: "",
   });
 
-  const handleSubmit = () => {
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = window.sessionStorage.getItem("participantId") || "";
+      setParticipantId(stored);
+    }
+  }, []);
+
+  const handleSubmit = async () => {
     if (!notes.t1.trim() || !notes.t2.trim() || !notes.t3.trim()) {
       alert("各タスクの感想を入力してください。");
       return;
     }
-    // TODO: submit to backend if needed
-    router.push("/s2/complete");
+    if (!participantId) {
+      alert("参加者IDがありません。ログインからやり直してください。");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/surveys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          participantId,
+          session: "s2",
+          taskId: "S2_IMPRESSIONS",
+          stage: "impressions",
+          condition: "NONE",
+          answers: notes,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.error("s2 impressions submit failed", err);
+        alert("送信に失敗しました。もう一度お試しください。");
+        return;
+      }
+      router.push("/s2/complete");
+    } catch (e) {
+      console.error("s2 impressions submit error", e);
+      alert("送信に失敗しました。ネットワークを確認してください。");
+    }
   };
 
   return (

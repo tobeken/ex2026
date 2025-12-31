@@ -171,6 +171,33 @@ export default function Session1Page() {
   const [remainingTime, setRemainingTime] = useState<number | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
+  const submitSurvey = async (payload: {
+    stage: "pre" | "post";
+    answers: any;
+  }) => {
+    if (!participantId || !currentTask) return;
+    try {
+      const res = await fetch("/api/surveys", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          participantId,
+          session: "s1",
+          taskId: currentTask.taskId,
+          stage: payload.stage,
+          condition: currentTask.condition,
+          answers: payload.answers,
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        console.error("s1 survey submit failed", err);
+      }
+    } catch (e) {
+      console.error("s1 survey submit error", e);
+    }
+  };
+
   const handleNextTask = (force?: boolean) => {
     if (sessionActive) return;
     if (!voiceCompleted && !force) return;
@@ -180,11 +207,18 @@ export default function Session1Page() {
     setVoiceCompleted(false);
   };
 
-  const handleSurveySubmit = () => {
+  const handleSurveySubmit = (answers: Record<string, string>) => {
     if (!noteSaved[currentTaskIndex]) {
       alert("自由記述を保存してください。");
       return;
     }
+    submitSurvey({
+      stage: "pre",
+      answers: {
+        note: currentNote,
+        ...answers,
+      },
+    });
     setStage("voice");
   };
 
@@ -224,6 +258,13 @@ export default function Session1Page() {
       alert("Q1とQ2の両方に回答してください。");
       return;
     }
+    submitSurvey({
+      stage: "post",
+      answers: {
+        q1: answers.q1,
+        q2: answers.q2,
+      },
+    });
     const completedNext = [...postCompleted];
     completedNext[currentTaskIndex] = true;
     setPostCompleted(completedNext);
@@ -256,11 +297,23 @@ export default function Session1Page() {
 
   return (
     <div className="w-full max-w-2xl mx-auto px-4 py-10 space-y-6">
+      {participantId && (
+        <div className="flex justify-end">
+          <Badge variant="secondary" className="px-3 py-1">
+            ID: {participantId}
+          </Badge>
+        </div>
+      )}
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold">Session 1</h1>
         <p className="text-sm text-muted-foreground">
           1回目も 3 タスク連続で進めます。Start / Stop のみで進行できます。
         </p>
+        {participantId && (
+          <p className="text-xs text-muted-foreground">
+            参加者ID: <span className="font-semibold text-foreground">{participantId}</span>
+          </p>
+        )}
       </div>
 
       <Card className="p-4 space-y-3">

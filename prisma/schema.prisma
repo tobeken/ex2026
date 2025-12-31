@@ -34,6 +34,7 @@ model Participant {
 
   assignments    Assignment[]
   playbackAssets PlaybackAsset[]
+  surveyResponses SurveyResponse[]
 }
 
 model Assignment {
@@ -70,4 +71,21 @@ model PlaybackAsset {
   /// participant × task × condition で1本
   @@unique([participantId, taskId, conditionId])
   @@index([participantId])
+}
+
+model SurveyResponse {
+  id             String   @id @default(cuid())
+  participantId  String
+  session        String   // "practice" | "s1" | "s2"
+  taskId         String?  // TaskId 文字列表現を保存（null可）
+  stage          String   // "pre" | "post" | "followup" など
+  condition      String?  // SUMMARY / NARRATIVE / NONE / PRACTICE など
+  answers        Json     // アンケート回答本体（柔軟に保持）
+  createdAt      DateTime @default(now())
+
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@index([participantId])
+  @@index([session])
+  @@index([taskId])
 }

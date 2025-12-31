@@ -4,14 +4,18 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 
 export default function SessionsPage() {
   const [participantId, setParticipantId] = useState("");
+  const [practiceDone, setPracticeDone] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       const stored = window.sessionStorage.getItem("participantId") || "";
       setParticipantId(stored);
+      const practiced = window.sessionStorage.getItem("practiceDone") === "true";
+      setPracticeDone(practiced);
     }
   }, []);
 
@@ -19,12 +23,36 @@ export default function SessionsPage() {
 
   return (
     <div className="w-full max-w-4xl mx-auto px-6 py-12 space-y-6">
+      {hasId && (
+        <div className="flex justify-end">
+          <Badge variant="secondary" className="px-3 py-1">
+            ID: {participantId}
+          </Badge>
+        </div>
+      )}
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold">Session 選択</h1>
         <p className="text-sm text-muted-foreground">
           ログイン済みの参加者IDで Session1 / Session2 へ進んでください。
         </p>
+        {hasId && (
+          <p className="text-xs text-muted-foreground">
+            参加者ID: <span className="font-semibold text-foreground">{participantId}</span>
+          </p>
+        )}
       </div>
+
+      <Card className="p-4 flex items-center justify-between">
+        <div>
+          <p className="text-lg font-medium">練習タスク</p>
+          <p className="text-sm text-muted-foreground">
+            ダークチョコレートについて（アンケート → 音声対話 → アンケート）
+          </p>
+        </div>
+        <Button asChild disabled={!hasId || practiceDone} variant="outline">
+          <Link href="/practice">練習へ</Link>
+        </Button>
+      </Card>
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card className="p-4 flex items-center justify-between">
@@ -40,7 +68,7 @@ export default function SessionsPage() {
         <Card className="p-4 flex items-center justify-between">
           <div>
             <p className="text-lg font-medium">Session 2</p>
-            <p className="text-sm text-muted-foreground">3タスク連続（2回目）</p>
+            <p className="text-sm text-muted-foreground">3タスク（2回目）</p>
           </div>
           <Button asChild disabled={!hasId} variant="secondary">
             <Link href="/s2">Session2へ</Link>

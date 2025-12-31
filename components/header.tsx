@@ -66,11 +66,6 @@ export function Header() {
           transition={{ delay: 0.1 }}
           className="flex gap-3 items-center justify-end ml-auto"
         >
-          {showId && participantId && (
-            <span className="text-xs text-muted-foreground">
-              ID: <span className="font-medium text-foreground">{participantId}</span>
-            </span>
-          )}
           {showLogout && (
             <Button asChild variant="outline" size="sm">
               <Link href="/logout">ログアウト</Link>

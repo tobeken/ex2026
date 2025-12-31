@@ -25,6 +25,7 @@ interface UseWebRTCAudioSessionReturn {
   registerFunction: (name: string, fn: Function) => void;
   msgs: any[];
   currentVolume: number;
+  isMicActive: boolean;
   conversation: Conversation[];
   sendTextMessage: (text: string) => void;
 }
@@ -64,6 +65,8 @@ export default function useWebRTCAudioSession(
   const [currentVolume, setCurrentVolume] = useState(0);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const volumeIntervalRef = useRef<number | null>(null);
+  const [isMicActive, setIsMicActive] = useState(false);
+  const micActiveRef = useRef(false);
 
   /**
    * We track only the ephemeral user message **ID** here.
@@ -357,6 +360,11 @@ export default function useWebRTCAudioSession(
       if (audioIndicatorRef.current) {
         audioIndicatorRef.current.classList.toggle("active", average > 30);
       }
+      const active = average > 30;
+      if (active !== micActiveRef.current) {
+        micActiveRef.current = active;
+        setIsMicActive(active);
+      }
       requestAnimationFrame(updateIndicator);
     };
     updateIndicator();
@@ -571,6 +579,7 @@ export default function useWebRTCAudioSession(
     registerFunction,
     msgs,
     currentVolume,
+    isMicActive,
     conversation,
     sendTextMessage,
   };

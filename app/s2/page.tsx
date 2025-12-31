@@ -1,38 +1,50 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import VoicePanel from "@/components/voice-panel";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import Link from "next/link";
 
 const tasks = [
-  { title: "誕生日プレゼントを探す", condition: "SUMMARY" },
-  { title: "週末のレストランを探す", condition: "DETAIL" },
-  { title: "研究テーマの資料探し", condition: "LRP" },
+  {
+    title: "トピック1: 誕生日プレゼント",
+    condition: "SUMMARY",
+    scenario:
+      "あなたの知人が来月誕生日を迎えます。音声対話システムで調べながら、予算や候補、選ぶポイントを検討してください。",
+  },
+  {
+    title: "トピック2: 送別会の場所",
+    condition: "DETAIL",
+    scenario:
+      "お世話になっている人の送別会の幹事。来月の開催場所を探し、予算・イベント・規模・料理などを調べながら検討してください。",
+  },
+  {
+    title: "トピック3: 休日旅行の計画",
+    condition: "LRP",
+    scenario:
+      "来月の休日に短期旅行を計画。行き先、予算、移動手段、宿泊先を調べ、複数案を比較し現実的な旅行プランを考えてください。",
+  },
 ];
 
 export default function Session2Page() {
   const [participantId, setParticipantId] = useState("");
-  const [isLoaded, setIsLoaded] = useState(false);
   const [currentTaskIndex, setCurrentTaskIndex] = useState(0);
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [audioFinished, setAudioFinished] = useState(false);
   const [sessionActive, setSessionActive] = useState(false);
 
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = window.sessionStorage.getItem("participantId") || "";
+      setParticipantId(stored);
+    }
+  }, []);
+
   const currentTask = tasks[currentTaskIndex];
 
-  const canStart = useMemo(
-    () =>
-      participantId.trim().length > 0 &&
-      isLoaded &&
-      audioFinished &&
-      !audioPlaying,
-    [participantId, isLoaded, audioFinished, audioPlaying],
-  );
-
-  const handleLoad = () => setIsLoaded(true);
+  const canStart = audioFinished && !audioPlaying;
 
   const handlePlayAudio = () => {
     setAudioPlaying(true);
@@ -50,41 +62,14 @@ export default function Session2Page() {
     setAudioFinished(false);
   };
 
-  useEffect(() => {
-    setIsLoaded(false);
-  }, [participantId]);
-
   return (
     <div className="w-full max-w-3xl mx-auto px-4 py-10 space-y-6">
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold">Session 2</h1>
         <p className="text-sm text-muted-foreground">
-          2回目（3タスク連続）。IDをロード → 音声再生 → Start/Stop → Next の流れです。
+          2回目（3タスク連続）。音声再生 → Start/Stop → Next の流れです。ID入力は不要です。
         </p>
       </div>
-
-      <Card className="p-4 space-y-3">
-        <div className="flex flex-col md:flex-row gap-3 md:items-end">
-          <label className="text-sm font-medium flex-1 flex flex-col gap-2">
-            Participant ID
-            <Input
-              value={participantId}
-              onChange={(e) => setParticipantId(e.target.value)}
-              placeholder="例: P002"
-            />
-          </label>
-          <Button
-            onClick={handleLoad}
-            disabled={participantId.trim().length === 0}
-            variant={isLoaded ? "secondary" : "default"}
-          >
-            Load
-          </Button>
-        </div>
-        <p className="text-xs text-muted-foreground">
-          Load でIDを確定 → Play audio で説明を再生 → 再生完了後に Start で検索開始。
-        </p>
-      </Card>
 
       <Card className="p-4 space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
@@ -93,11 +78,12 @@ export default function Session2Page() {
               Step {currentTaskIndex + 1} / {tasks.length}
             </p>
             <p className="text-lg font-semibold">{currentTask.title}</p>
-            <p className="text-xs text-muted-foreground">
-              Condition:{" "}
-              <Badge variant="outline" className="ml-1">
-                {currentTask.condition}
-              </Badge>
+            <div className="text-xs text-muted-foreground flex items-center gap-1">
+              <span>Condition:</span>
+              <Badge variant="outline">{currentTask.condition}</Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2 leading-6">
+              {currentTask.scenario}
             </p>
           </div>
           <Button onClick={handlePlayAudio} disabled={audioPlaying}>

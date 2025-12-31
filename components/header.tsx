@@ -1,17 +1,29 @@
 "use client";
 
-// import { Button } from "@/components/ui/button";
+import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
 import { ThemeSwitcher } from "@/components/theme-switcher";
 import { MobileNav } from "./mobile-nav";
 import { Badge } from "./ui/badge";
-// import { siteConfig } from "@/config/site";
-// import { TwitterIcon, StarIcon } from "lucide-react";
+import { Button } from "./ui/button";
 import { motion } from "framer-motion";
 import { useTranslations } from "@/components/translations-context";
+import { usePathname } from "next/navigation";
 
 export function Header() {
-  const { t } = useTranslations()
+  const { t } = useTranslations();
+  const [participantId, setParticipantId] = useState("");
+  const pathname = usePathname();
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = window.sessionStorage.getItem("participantId") || "";
+      setParticipantId(stored);
+    }
+  }, []);
+
+  const showId = useMemo(() => pathname !== "/", [pathname]);
+  const showLogout = useMemo(() => pathname !== "/", [pathname]);
   return (
     <motion.header
       initial={{ y: -20, opacity: 0 }}
@@ -27,10 +39,10 @@ export function Header() {
           transition={{ delay: 0.2 }}
           className="max-md:hidden flex items-center"
         >
-          <Link href="/" className="flex gap-3 items-center">
+          <div className="flex gap-3 items-center cursor-default select-none">
             <motion.h1 
               className="text-lg font-medium tracking-tighter flex gap-1 items-center"
-              whileHover={{ scale: 1.02 }}
+              whileHover={{ scale: 1.0 }}
             >
               {t('header.logo')}
             </motion.h1>
@@ -43,7 +55,7 @@ export function Header() {
                 {t('header.beta')}
               </Badge>
             </motion.div>
-          </Link>
+          </div>
         </motion.nav>
         <motion.div 
           initial={{ opacity: 0, x: 20 }}
@@ -51,6 +63,16 @@ export function Header() {
           transition={{ delay: 0.1 }}
           className="flex gap-3 items-center justify-end ml-auto"
         >
+          {showId && participantId && (
+            <span className="text-xs text-muted-foreground">
+              ID: <span className="font-medium text-foreground">{participantId}</span>
+            </span>
+          )}
+          {showLogout && (
+            <Button asChild variant="outline" size="sm">
+              <Link href="/logout">ログアウト</Link>
+            </Button>
+          )}
           {/* <Link
             href={siteConfig.links.github}
             target="_blank"

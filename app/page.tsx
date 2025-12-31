@@ -7,19 +7,48 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 export default function HomePage() {
   const [participantId, setParticipantId] = useState("");
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
   const canProceed = participantId.trim().length > 0;
 
-  const handleLogin = () => {
-    if (!canProceed) return;
-    if (typeof window !== "undefined") {
-      window.sessionStorage.setItem("participantId", participantId.trim());
+  const handleLogin = async () => {
+    if (!canProceed || loading) return;
+    setLoading(true);
+    const pid = participantId.trim();
+    try {
+      const res = await fetch("/api/participants", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: pid }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error("参加者登録に失敗しました", {
+          description: err?.error || res.statusText,
+        });
+        setLoading(false);
+        return;
+      }
+      const data = await res.json().catch(() => ({}));
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem("participantId", pid);
+        if (data?.group) {
+          window.sessionStorage.setItem("participantGroup", data.group);
+        }
+      }
+      router.push("/sessions");
+    } catch (error: any) {
+      toast.error("参加者登録に失敗しました", {
+        description: error?.message || "Network error",
+      });
+    } finally {
+      setLoading(false);
     }
-    router.push("/sessions");
   };
 
   return (
@@ -67,7 +96,7 @@ export default function HomePage() {
               />
             </div>
             <div className="flex gap-2">
-              <Button className="w-full" onClick={handleLogin} disabled={!canProceed}>
+              <Button className="w-full" onClick={handleLogin} disabled={!canProceed || loading}>
                 ログイン
               </Button>
             </div>

@@ -5,7 +5,7 @@ import VoicePanel from "@/components/voice-panel";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import Link from "next/link";
+import { Textarea } from "@/components/ui/textarea";
 
 const tasks = [
   {
@@ -28,21 +28,63 @@ const tasks = [
   },
 ];
 
+const STORAGE_KEY = "taskCustomNotes";
+
 export default function Session2Page() {
   const [participantId, setParticipantId] = useState("");
   const [currentTaskIndex, setCurrentTaskIndex] = useState(0);
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [audioFinished, setAudioFinished] = useState(false);
   const [sessionActive, setSessionActive] = useState(false);
+  const [voiceCompleted, setVoiceCompleted] = useState(false);
+  const [customNotes, setCustomNotes] = useState<string[]>(() =>
+    tasks.map(() => "")
+  );
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       const stored = window.sessionStorage.getItem("participantId") || "";
       setParticipantId(stored);
+
+      const notes = window.sessionStorage.getItem(STORAGE_KEY);
+      if (notes) {
+        try {
+          const parsed = JSON.parse(notes);
+          if (Array.isArray(parsed) && parsed.length === tasks.length) {
+            setCustomNotes(parsed.map((v) => (typeof v === "string" ? v : "")));
+          }
+        } catch (e) {
+          console.warn("Failed to parse stored notes", e);
+        }
+      }
     }
   }, []);
 
   const currentTask = tasks[currentTaskIndex];
+  const currentNote = customNotes[currentTaskIndex] || "";
+  const notePrompt = (() => {
+    if (currentTaskIndex === 0) return "トピック1: 送る相手を入力してください。";
+    if (currentTaskIndex === 1) return "トピック2: お世話になっている人を入力してください。";
+    return "トピック3: 行き先を入力してください。";
+  })();
+  const notePlaceholder = (() => {
+    if (currentTaskIndex === 0) return "例: 祖母 / 同僚 / 友人";
+    if (currentTaskIndex === 1) return "例: 部署の先輩 / 担当教授";
+    return "例: 京都 / ソウル / 札幌";
+  })();
+  const scenarioWithReplacement = (() => {
+    if (!currentNote) return currentTask.scenario;
+    if (currentTaskIndex === 0) {
+      return currentTask.scenario.replace("知人", currentNote);
+    }
+    if (currentTaskIndex === 1) {
+      return currentTask.scenario.replace("お世話になっている人", currentNote);
+    }
+    if (currentTaskIndex === 2) {
+      return currentTask.scenario.replace("旅行", currentNote);
+    }
+    return currentTask.scenario;
+  })();
 
   const canStart = audioFinished && !audioPlaying;
 
@@ -55,11 +97,21 @@ export default function Session2Page() {
     }, 1500);
   };
 
-  const handleNextTask = () => {
+  const handleNextTask = (force?: boolean) => {
     if (currentTaskIndex >= tasks.length - 1) return;
+    if (!voiceCompleted && !force) return;
     setCurrentTaskIndex((idx) => idx + 1);
     setAudioPlaying(false);
     setAudioFinished(false);
+    setVoiceCompleted(false);
+  };
+
+  const handleTaskComplete = () => {
+    if (sessionActive) return;
+    setVoiceCompleted(true);
+    if (currentTaskIndex < tasks.length - 1) {
+      handleNextTask(true);
+    }
   };
 
   return (
@@ -82,8 +134,8 @@ export default function Session2Page() {
               <span>Condition:</span>
               <Badge variant="outline">{currentTask.condition}</Badge>
             </div>
-            <p className="text-xs text-muted-foreground mt-2 leading-6">
-              {currentTask.scenario}
+            <p className="text-sm text-foreground mt-2 leading-6 font-medium">
+              {scenarioWithReplacement}
             </p>
           </div>
           <Button onClick={handlePlayAudio} disabled={audioPlaying}>
@@ -97,17 +149,6 @@ export default function Session2Page() {
               ? "音声再生中..."
               : "再生ボタンを押してください。"}
         </div>
-        <div className="flex gap-2">
-          <Button
-            onClick={handleNextTask}
-            disabled={
-              currentTaskIndex >= tasks.length - 1 || sessionActive
-            }
-            variant="outline"
-          >
-            Next task
-          </Button>
-        </div>
       </Card>
 
       <VoicePanel
@@ -115,6 +156,17 @@ export default function Session2Page() {
         canStart={canStart}
         onSessionStateChange={setSessionActive}
       />
+      <div className="flex justify-end">
+        <Button
+          onClick={handleTaskComplete}
+          disabled={sessionActive || voiceCompleted}
+          variant="secondary"
+        >
+          {currentTaskIndex >= tasks.length - 1
+            ? "タスク完了"
+            : "タスク完了（次へ）"}
+        </Button>
+      </div>
     </div>
   );
 }

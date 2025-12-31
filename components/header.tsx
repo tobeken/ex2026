@@ -22,7 +22,10 @@ export function Header() {
     }
   }, []);
 
-  const showId = useMemo(() => pathname !== "/", [pathname]);
+  const showId = useMemo(
+    () => pathname !== "/" && participantId.trim().length > 0,
+    [pathname, participantId],
+  );
   const showLogout = useMemo(() => pathname !== "/", [pathname]);
   return (
     <motion.header

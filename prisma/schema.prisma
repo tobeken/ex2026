@@ -1,0 +1,73 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url       = env("DATABASE_URL")   // pooler (for client)
+  directUrl = env("DIRECT_URL")     // primary (for migrations)
+}
+
+enum TaskId {
+  BIRTHDAY_GIFT
+  FAREWELL_PARTY
+  WEEKEND_TRIP
+}
+
+enum ConditionId {
+  NONE
+  SUMMARY
+  NARRATIVE
+}
+
+enum LatinGroup {
+  G1
+  G2
+  G3
+}
+
+model Participant {
+  /// 被験者ID（p001 など）
+  id        String     @id
+  group     LatinGroup
+  createdAt DateTime   @default(now())
+
+  assignments    Assignment[]
+  playbackAssets PlaybackAsset[]
+}
+
+model Assignment {
+  id            String      @id @default(cuid())
+  participantId String
+  orderIndex    Int         // 1,2,3（Session2での実施順）
+  taskId        TaskId
+  conditionId   ConditionId
+  createdAt     DateTime    @default(now())
+
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  /// 同一参加者で順番が被らない
+  @@unique([participantId, orderIndex])
+  /// 同一参加者で同じタスクは1回だけ
+  @@unique([participantId, taskId])
+  /// 同一参加者で同じ条件は1回だけ
+  @@unique([participantId, conditionId])
+  @@index([participantId])
+}
+
+model PlaybackAsset {
+  id              String      @id @default(cuid())
+  participantId   String
+  taskId          TaskId
+  conditionId     ConditionId
+  audioUrl        String
+  durationMs      Int?
+  sourceSessionId String?
+  generatedAt     DateTime    @default(now())
+
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  /// participant × task × condition で1本
+  @@unique([participantId, taskId, conditionId])
+  @@index([participantId])
+}

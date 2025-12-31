@@ -7,11 +7,15 @@ import { Button } from "@/components/ui/button";
 
 export default function SessionsPage() {
   const [participantId, setParticipantId] = useState("");
+  const [practiceDone, setPracticeDone] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       const stored = window.sessionStorage.getItem("participantId") || "";
       setParticipantId(stored);
+
+      const practiced = window.sessionStorage.getItem("practiceDone") === "true";
+      setPracticeDone(practiced);
     }
   }, []);
 
@@ -25,6 +29,18 @@ export default function SessionsPage() {
           ログイン済みの参加者IDで Session1 / Session2 へ進んでください。
         </p>
       </div>
+
+      <Card className="p-4 flex items-center justify-between">
+        <div>
+          <p className="text-lg font-medium">練習タスク</p>
+          <p className="text-sm text-muted-foreground">
+            ダークチョコレートについて（アンケート → 音声対話 → アンケート）
+          </p>
+        </div>
+        <Button asChild disabled={!hasId || practiceDone} variant="outline">
+          <Link href="/practice">練習へ</Link>
+        </Button>
+      </Card>
 
       <div className="grid gap-4 md:grid-cols-2">
         <Card className="p-4 flex items-center justify-between">
@@ -40,7 +56,7 @@ export default function SessionsPage() {
         <Card className="p-4 flex items-center justify-between">
           <div>
             <p className="text-lg font-medium">Session 2</p>
-            <p className="text-sm text-muted-foreground">3タスク連続（2回目）</p>
+            <p className="text-sm text-muted-foreground">3タスク（2回目）</p>
           </div>
           <Button asChild disabled={!hasId} variant="secondary">
             <Link href="/s2">Session2へ</Link>

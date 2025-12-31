@@ -14,6 +14,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
+import { useRouter } from "next/navigation";
 
 const tasks = [
   {
@@ -87,6 +88,7 @@ export default function Session2Page() {
   const [postCompleted, setPostCompleted] = useState<boolean[]>(() =>
     tasks.map(() => false)
   );
+  const router = useRouter();
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -217,7 +219,7 @@ export default function Session2Page() {
     completedNext[currentTaskIndex] = true;
     setPostCompleted(completedNext);
     if (currentTaskIndex >= tasks.length - 1) {
-      // TODO: 最終タスク完了時の処理
+      router.push("/s2/impressions");
     } else {
       handleNextTask(true);
     }

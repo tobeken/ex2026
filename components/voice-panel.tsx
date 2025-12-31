@@ -10,6 +10,7 @@ type VoicePanelProps = {
   canStart?: boolean;
   title?: string;
   onSessionStateChange?: (active: boolean) => void;
+  onStart?: () => void;
 };
 
 export function VoicePanel({
@@ -17,6 +18,7 @@ export function VoicePanel({
   canStart = true,
   title = "Voice Session",
   onSessionStateChange,
+  onStart,
 }: VoicePanelProps) {
   const { status, isSessionActive, startSession, stopSession } =
     useWebRTCAudioSession(voice);
@@ -28,6 +30,7 @@ export function VoicePanel({
   const handleStart = async () => {
     if (!canStart || isSessionActive) return;
     try {
+      onStart?.();
       await startSession();
     } catch (error) {
       console.error("Failed to start session:", error);

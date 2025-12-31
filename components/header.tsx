@@ -8,7 +8,6 @@ import { Badge } from "./ui/badge";
 // import { siteConfig } from "@/config/site";
 // import { TwitterIcon, StarIcon } from "lucide-react";
 import { motion } from "framer-motion";
-import { LanguageSwitcher } from "@/components/language-switcher";
 import { useTranslations } from "@/components/translations-context";
 
 export function Header() {
@@ -52,7 +51,6 @@ export function Header() {
           transition={{ delay: 0.1 }}
           className="flex gap-3 items-center justify-end ml-auto"
         >
-          <LanguageSwitcher /> 
           {/* <Link
             href={siteConfig.links.github}
             target="_blank"

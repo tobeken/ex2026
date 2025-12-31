@@ -1,10 +1,6 @@
 "use client"
 
 import { createContext, useContext, useState, ReactNode } from 'react'
-import { en } from '@/lib/translations/en'
-import { es } from '@/lib/translations/es'
-import { fr } from '@/lib/translations/fr'
-import { zh } from '@/lib/translations/zh'
 import { jp } from '@/lib/translations/jp'
 
 type TranslationValue = string | { [key: string]: TranslationValue }
@@ -15,10 +11,6 @@ type Translations = {
 
 const translations: { [key: string]: Translations } = {
   jp,
-  es,
-  fr,
-  zh,
-  en
 }
 
 type TranslationsContextType = {
@@ -30,7 +22,7 @@ type TranslationsContextType = {
 const TranslationsContext = createContext<TranslationsContextType | null>(null)
 
 export function TranslationsProvider({ children }: { children: ReactNode }) {
-  const [locale, setLocale] = useState('en')
+  const [locale] = useState('jp')
 
   const t = (key: string): string => {
     const keys = key.split('.')
@@ -45,7 +37,7 @@ export function TranslationsProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <TranslationsContext.Provider value={{ t, locale, setLocale }}>
+    <TranslationsContext.Provider value={{ t, locale, setLocale: () => {} }}>
       {children}
     </TranslationsContext.Provider>
   )

@@ -1,11 +1,19 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import VoicePanel from "@/components/voice-panel";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { toast } from "sonner";
 
 const tasks = [
   {
@@ -39,6 +47,45 @@ export default function Session2Page() {
   const [voiceCompleted, setVoiceCompleted] = useState(false);
   const [customNotes, setCustomNotes] = useState<string[]>(() =>
     tasks.map(() => "")
+  );
+  const [followupNotes, setFollowupNotes] = useState<string[]>(() =>
+    tasks.map(() => "")
+  );
+  const [isFollowupOpen, setIsFollowupOpen] = useState(false);
+  const [followupDraft, setFollowupDraft] = useState("");
+  const [stage, setStage] = useState<"voice" | "post">("voice");
+  const [remainingTime, setRemainingTime] = useState<number | null>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const [postAnswers, setPostAnswers] = useState(
+    () =>
+      tasks.map(() => ({
+        q1: "",
+        q2: 0,
+        q3: 0,
+        q4: {
+          mental: 0,
+          physical: 0,
+          temporal: 0,
+          performance: 0,
+          effort: 0,
+          frustration: 0,
+        },
+      })) as {
+        q1: string;
+        q2: number;
+        q3: number;
+        q4: {
+          mental: number;
+          physical: number;
+          temporal: number;
+          performance: number;
+          effort: number;
+          frustration: number;
+        };
+      }[]
+  );
+  const [postCompleted, setPostCompleted] = useState<boolean[]>(() =>
+    tasks.map(() => false)
   );
 
   useEffect(() => {
@@ -86,32 +133,114 @@ export default function Session2Page() {
     return currentTask.scenario;
   })();
 
-  const canStart = audioFinished && !audioPlaying;
+  const canStart = stage === "voice" && audioFinished && !audioPlaying;
 
   const handlePlayAudio = () => {
     setAudioPlaying(true);
     setAudioFinished(false);
+    setIsFollowupOpen(false);
+    setFollowupDraft(followupNotes[currentTaskIndex] || "");
     window.setTimeout(() => {
       setAudioPlaying(false);
       setAudioFinished(true);
+      setIsFollowupOpen(true);
     }, 1500);
   };
 
   const handleNextTask = (force?: boolean) => {
     if (currentTaskIndex >= tasks.length - 1) return;
-    if (!voiceCompleted && !force) return;
+    if (stage === "voice" && !voiceCompleted && !force) return;
+    if (stage === "post" && !postCompleted[currentTaskIndex] && !force) return;
     setCurrentTaskIndex((idx) => idx + 1);
     setAudioPlaying(false);
     setAudioFinished(false);
     setVoiceCompleted(false);
+    setStage("voice");
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    setRemainingTime(null);
   };
 
   const handleTaskComplete = () => {
     if (sessionActive) return;
     setVoiceCompleted(true);
-    if (currentTaskIndex < tasks.length - 1) {
+    setStage("post");
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    setRemainingTime(null);
+  };
+
+  const handleFollowupSave = () => {
+    if (!followupDraft.trim()) {
+      alert("内容を入力してください。");
+      return;
+    }
+    const next = [...followupNotes];
+    next[currentTaskIndex] = followupDraft;
+    setFollowupNotes(next);
+    setIsFollowupOpen(false);
+  };
+
+  const handlePostAnswerChange = (
+    key: "q1" | "q2" | "q3" | "q4",
+    value: string,
+    tlxKey?: keyof (typeof postAnswers)[number]["q4"],
+  ) => {
+    const next = [...postAnswers];
+    if (key === "q4" && tlxKey) {
+      next[currentTaskIndex] = {
+        ...next[currentTaskIndex],
+        q4: { ...next[currentTaskIndex].q4, [tlxKey]: Number(value) },
+      };
+    } else {
+      next[currentTaskIndex] = { ...next[currentTaskIndex], [key]: key === "q1" ? value : Number(value) };
+    }
+    setPostAnswers(next);
+    const completedNext = [...postCompleted];
+    completedNext[currentTaskIndex] = false;
+    setPostCompleted(completedNext);
+  };
+
+  const handlePostSubmit = () => {
+    const ans = postAnswers[currentTaskIndex];
+    const tlxValues = Object.values(ans.q4);
+    const tlxFilled = tlxValues.every((v) => v > 0);
+    if (!ans.q1.trim() || ans.q2 <= 0 || ans.q3 <= 0 || !tlxFilled) {
+      alert("すべての項目に回答してください。");
+      return;
+    }
+    const completedNext = [...postCompleted];
+    completedNext[currentTaskIndex] = true;
+    setPostCompleted(completedNext);
+    if (currentTaskIndex >= tasks.length - 1) {
+      // TODO: 最終タスク完了時の処理
+    } else {
       handleNextTask(true);
     }
+  };
+
+  const handleStartSession = () => {
+    setRemainingTime(8 * 60);
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      setRemainingTime((prev) => {
+        if (prev === null) return null;
+        if (prev <= 1) {
+          clearInterval(timerRef.current as NodeJS.Timeout);
+          timerRef.current = null;
+          setRemainingTime(0);
+          setVoiceCompleted(true);
+          setStage("post");
+          toast.warning("8分経過しました。アンケートに進んでください。");
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
   };
 
   return (
@@ -138,35 +267,163 @@ export default function Session2Page() {
               {scenarioWithReplacement}
             </p>
           </div>
-          <Button onClick={handlePlayAudio} disabled={audioPlaying}>
-            {audioPlaying ? "再生中..." : "Play audio"}
-          </Button>
+          {stage === "voice" && (
+            <Button onClick={handlePlayAudio} disabled={audioPlaying}>
+              {audioPlaying ? "再生中..." : "Play audio"}
+            </Button>
+          )}
         </div>
-        <div className="text-xs text-muted-foreground">
-          {audioFinished
-            ? "再生完了 → Start で検索を開始できます。"
-            : audioPlaying
-              ? "音声再生中..."
-              : "再生ボタンを押してください。"}
+        <div className="text-xs text-muted-foreground flex items-center justify-between">
+          <span>
+            {stage === "voice"
+              ? audioFinished
+                ? "Start で検索を開始できます。"
+                : "Play audio を実行してください。"
+              : "アンケートに回答してください。"}
+          </span>
+          {stage === "voice" && remainingTime !== null && (
+            <span className="text-sm font-semibold text-red-500">
+              残り時間: {Math.floor(remainingTime / 60)}分{remainingTime % 60}秒
+            </span>
+          )}
         </div>
       </Card>
 
-      <VoicePanel
-        title="VoicePanel"
-        canStart={canStart}
-        onSessionStateChange={setSessionActive}
-      />
-      <div className="flex justify-end">
-        <Button
-          onClick={handleTaskComplete}
-          disabled={sessionActive || voiceCompleted}
-          variant="secondary"
-        >
-          {currentTaskIndex >= tasks.length - 1
-            ? "タスク完了"
-            : "タスク完了（次へ）"}
-        </Button>
-      </div>
+      {followupNotes[currentTaskIndex]?.trim() && (
+        <Card className="p-4 space-y-2">
+          <p className="text-sm font-medium">調べ残し・次に調べたいこと</p>
+          <p className="text-sm whitespace-pre-wrap">
+            {followupNotes[currentTaskIndex]}
+          </p>
+        </Card>
+      )}
+
+      {stage === "voice" && (
+        <>
+          <VoicePanel
+            title="VoicePanel"
+            canStart={canStart}
+            onSessionStateChange={setSessionActive}
+            onStart={handleStartSession}
+          />
+          <div className="flex justify-end">
+            <Button
+              onClick={handleTaskComplete}
+              disabled={sessionActive || voiceCompleted}
+              variant="secondary"
+            >
+              {currentTaskIndex >= tasks.length - 1
+                ? "タスク完了"
+                : "タスク完了（次へ）"}
+            </Button>
+          </div>
+        </>
+      )}
+
+      {stage === "post" && (
+        <Card className="p-4 space-y-4">
+          <p className="text-sm font-semibold">
+            Q1. 今回、新たに調べて分かったこと・理解したことを箇条書きで書いてください
+          </p>
+          <Textarea
+            value={postAnswers[currentTaskIndex]?.q1 || ""}
+            onChange={(e) => handlePostAnswerChange("q1", e.target.value)}
+            placeholder="箇条書きで記入してください"
+            className="min-h-[120px]"
+          />
+          <div className="space-y-2">
+            <p className="text-sm font-semibold">
+              Q2. 検索前のシステムの音声が記憶想起に役立ったと思いますか？（5段階）
+            </p>
+            <select
+              className="w-full rounded-md border bg-background p-2 text-sm"
+              value={postAnswers[currentTaskIndex]?.q2 || 0}
+              onChange={(e) => handlePostAnswerChange("q2", e.target.value)}
+            >
+              <option value={0}>選択してください</option>
+              {[1, 2, 3, 4, 5].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-semibold">
+              Q3. 検索前に提示されたシステムの音声は、検索を再開し、最初の検索を行う際に役立ちましたか？（5段階）
+            </p>
+            <select
+              className="w-full rounded-md border bg-background p-2 text-sm"
+              value={postAnswers[currentTaskIndex]?.q3 || 0}
+              onChange={(e) => handlePostAnswerChange("q3", e.target.value)}
+            >
+              <option value={0}>選択してください</option>
+              {[1, 2, 3, 4, 5].map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-3">
+            <p className="text-sm font-semibold">Q4. 認知負荷 (NASA-TLX) 各項目（1-5）</p>
+            {([
+              ["mental", "メンタル要求"],
+              ["physical", "身体的要求"],
+              ["temporal", "時間的要求"],
+              ["performance", "達成度"],
+              ["effort", "努力"],
+              ["frustration", "フラストレーション"],
+            ] as const).map(([key, label]) => (
+              <div key={key} className="space-y-1">
+                <p className="text-xs text-muted-foreground">{label}</p>
+                <select
+                  className="w-full rounded-md border bg-background p-2 text-sm"
+                  value={postAnswers[currentTaskIndex]?.q4?.[key] || 0}
+                  onChange={(e) =>
+                    handlePostAnswerChange("q4", e.target.value, key)
+                  }
+                >
+                  <option value={0}>選択してください</option>
+                  {[1, 2, 3, 4, 5].map((n) => (
+                    <option key={n} value={n}>
+                      {n}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ))}
+          </div>
+          <div className="flex justify-end">
+            <Button onClick={handlePostSubmit}>
+              {currentTaskIndex >= tasks.length - 1
+                ? "アンケート送信（完了）"
+                : "アンケート送信（次へ）"}
+            </Button>
+          </div>
+        </Card>
+      )}
+
+      <Dialog open={isFollowupOpen} onOpenChange={setIsFollowupOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              前回の検索を踏まえて、調べ残っていること、次に調べたい点を箇条書きで書いてください
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Textarea
+              value={followupDraft}
+              onChange={(e) => setFollowupDraft(e.target.value)}
+              placeholder="箇条書きで入力してください"
+              className="min-h-[160px]"
+            />
+          </div>
+          <DialogFooter className="flex justify-end">
+            <Button onClick={handleFollowupSave}>保存</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

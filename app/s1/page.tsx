@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Link from "next/link";
 import VoicePanel from "@/components/voice-panel";
 import { Card } from "@/components/ui/card";
@@ -110,6 +110,8 @@ export default function Session1Page() {
     return currentTask.scenario;
   })();
   const canStart = !sessionActive && stage === "voice";
+  const [remainingTime, setRemainingTime] = useState<number | null>(null);
+  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleNextTask = (force?: boolean) => {
     if (sessionActive) return;
@@ -131,6 +133,11 @@ export default function Session1Page() {
   const handleTaskComplete = () => {
     if (sessionActive) return;
     setVoiceCompleted(true);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+      setRemainingTime(null);
+    }
     setStage("post");
   };
 
@@ -170,6 +177,25 @@ export default function Session1Page() {
     }
   };
 
+  const handleStartSession = async () => {
+    setRemainingTime(8 * 60);
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => {
+      setRemainingTime((prev) => {
+        if (prev === null) return null;
+        if (prev <= 1) {
+          clearInterval(timerRef.current as NodeJS.Timeout);
+          timerRef.current = null;
+          setVoiceCompleted(true);
+          setStage("post");
+          toast.warning("8分経過したため終了しました。アンケートに進んでください。");
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+  };
+
   return (
     <div className="w-full max-w-2xl mx-auto px-4 py-10 space-y-6">
       <div className="space-y-1">
@@ -194,6 +220,11 @@ export default function Session1Page() {
               {scenarioWithReplacement}
             </p>
           </div>
+          {stage === "voice" && remainingTime !== null && (
+            <p className="text-sm font-semibold text-red-500">
+              残り時間: {Math.floor(remainingTime / 60)}分{remainingTime % 60}秒
+            </p>
+          )}
         </div>
         {stage === "survey" && (
           <div className="space-y-2">
@@ -233,6 +264,7 @@ export default function Session1Page() {
             canStart={canStart}
             title={`VoicePanel - ${currentTask.title}`}
             onSessionStateChange={setSessionActive}
+            onStart={handleStartSession}
           />
           <div className="flex justify-end">
             <Button

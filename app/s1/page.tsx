@@ -1,16 +1,31 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
 import VoicePanel from "@/components/voice-panel";
-import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
 const tasks = [
-  { title: "誕生日プレゼントを探す", condition: "SUMMARY" },
-  { title: "週末のレストランを探す", condition: "DETAIL" },
-  { title: "研究テーマの資料探し", condition: "LRP" },
+  {
+    title: "トピック1: 誕生日プレゼント",
+    condition: "SUMMARY",
+    scenario:
+      "あなたの知人が来月誕生日を迎えます。音声対話システムで調べながら、予算や候補、選ぶポイントを検討してください。",
+  },
+  {
+    title: "トピック2: 送別会の場所",
+    condition: "DETAIL",
+    scenario:
+      "お世話になっている人の送別会の幹事。来月の開催場所を探し、予算・イベント・規模・料理などを調べながら検討してください。",
+  },
+  {
+    title: "トピック3: 休日旅行の計画",
+    condition: "LRP",
+    scenario:
+      "来月の休日に短期旅行を計画。行き先、予算、移動手段、宿泊先を調べ、複数案を比較し現実的な旅行プランを考えてください。",
+  },
 ];
 
 export default function Session1Page() {
@@ -18,12 +33,15 @@ export default function Session1Page() {
   const [currentTaskIndex, setCurrentTaskIndex] = useState(0);
   const [sessionActive, setSessionActive] = useState(false);
 
-  const currentTask = tasks[currentTaskIndex];
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const stored = window.sessionStorage.getItem("participantId") || "";
+      setParticipantId(stored);
+    }
+  }, []);
 
-  const canStart = useMemo(
-    () => participantId.trim().length > 0 && !sessionActive,
-    [participantId, sessionActive],
-  );
+  const currentTask = tasks[currentTaskIndex];
+  const canStart = !sessionActive;
 
   const handleNextTask = () => {
     if (sessionActive) return;
@@ -35,23 +53,9 @@ export default function Session1Page() {
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold">Session 1</h1>
         <p className="text-sm text-muted-foreground">
-          1回目も 3 タスク連続で進めます。参加者IDを入れて Start / Stop を各タスクで行ってください。
+          1回目も 3 タスク連続で進めます。Start / Stop のみで進行できます。
         </p>
       </div>
-
-      <Card className="p-4 space-y-3">
-        <label className="text-sm font-medium flex flex-col gap-2">
-          Participant ID
-          <Input
-            value={participantId}
-            onChange={(e) => setParticipantId(e.target.value)}
-            placeholder="例: P001"
-          />
-        </label>
-        <p className="text-xs text-muted-foreground">
-          各タスク: Start で Realtime 接続を開始、Stop で終了。Next は Stop 後に押してください。
-        </p>
-      </Card>
 
       <Card className="p-4 space-y-3">
         <div className="flex items-center justify-between flex-wrap gap-2">
@@ -60,11 +64,12 @@ export default function Session1Page() {
               Step {currentTaskIndex + 1} / {tasks.length}
             </p>
             <p className="text-lg font-semibold">{currentTask.title}</p>
-            <p className="text-xs text-muted-foreground">
-              Condition:{" "}
-              <Badge variant="outline" className="ml-1">
-                {currentTask.condition}
-              </Badge>
+            <div className="text-xs text-muted-foreground flex items-center gap-1">
+              <span>Condition:</span>
+              <Badge variant="outline">{currentTask.condition}</Badge>
+            </div>
+            <p className="text-xs text-muted-foreground mt-2 leading-6">
+              {currentTask.scenario}
             </p>
           </div>
           <Button

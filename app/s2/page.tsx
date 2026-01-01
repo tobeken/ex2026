@@ -96,6 +96,11 @@ export default function Session2Page() {
   );
   const [postCompleted, setPostCompleted] = useState<boolean[]>(() => [false, false, false]);
   const router = useRouter();
+  const [canAccess, setCanAccess] = useState(false);
+  const [isDone, setIsDone] = useState(false);
+  const [progressApplied, setProgressApplied] = useState(false);
+  const PROGRESS_IDX_KEY = "s2_currentTaskIndex";
+  const PROGRESS_STAGE_KEY = "s2_stage";
 
   const orderedTasks = useMemo(() => {
     const plan = ASSIGNMENT_PLAN[participantGroup] || ASSIGNMENT_PLAN.G1;
@@ -108,6 +113,16 @@ export default function Session2Page() {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
+      const s2done = window.sessionStorage.getItem("session2Done") === "true";
+      if (s2done) {
+        router.replace("/sessions");
+        return;
+      }
+      const s1done = window.sessionStorage.getItem("session1Done") === "true";
+      if (!s1done) {
+        router.replace("/sessions");
+        return;
+      }
       const stored = window.sessionStorage.getItem("participantId") || "";
       setParticipantId(stored);
       const storedGroup =
@@ -129,8 +144,9 @@ export default function Session2Page() {
           console.warn("Failed to parse stored notes", e);
         }
       }
+      setCanAccess(true);
     }
-  }, [orderedTasks]);
+  }, [orderedTasks, router]);
 
   useEffect(() => {
     setCurrentTaskIndex(0);
@@ -141,17 +157,69 @@ export default function Session2Page() {
     setCustomNotes((prev) =>
       orderedTasks.map((_, idx) => (typeof prev[idx] === "string" ? prev[idx] : ""))
     );
-    setFollowupNotes((prev) =>
-      orderedTasks.map((_, idx) => (typeof prev[idx] === "string" ? prev[idx] : ""))
-    );
-    setPostAnswers((prev) =>
-      orderedTasks.map(
+      setFollowupNotes((prev) =>
+        orderedTasks.map((_, idx) => (typeof prev[idx] === "string" ? prev[idx] : ""))
+      );
+      setPostAnswers((prev) =>
+        orderedTasks.map(
         (_, idx) =>
           prev[idx] || createPostAnswer()
       )
     );
     setPostCompleted((prev) => orderedTasks.map((_, idx) => !!prev[idx]));
   }, [orderedTasks]);
+
+  useEffect(() => {
+    const applyProgress = async () => {
+      if (!participantId || orderedTasks.length === 0 || progressApplied) return;
+      // 1) sessionStorage から進行中ステージ復元
+      if (typeof window !== "undefined") {
+        const storedIdx = Number(window.sessionStorage.getItem(PROGRESS_IDX_KEY) || "0");
+        const storedStage =
+          (window.sessionStorage.getItem(PROGRESS_STAGE_KEY) as "voice" | "post" | null) ||
+          null;
+        if (!Number.isNaN(storedIdx) && storedIdx >= 0 && storedIdx < orderedTasks.length) {
+          setCurrentTaskIndex(storedIdx);
+          if (storedStage === "post") {
+            setStage("post");
+          }
+        }
+      }
+      try {
+        const res = await fetch(
+          `/api/surveys?participantId=${encodeURIComponent(participantId)}&session=s2&stage=post`
+        );
+        if (!res.ok) return;
+        const data: { taskId?: string }[] = await res.json();
+        const completedIds = new Set(
+          data.filter((r) => r.taskId).map((r) => r.taskId as string)
+        );
+        const nextIdx = orderedTasks.findIndex((t) => !completedIds.has(t.taskId));
+        if (nextIdx === -1) {
+          // postアンケが全タスク分あり → impressions か complete へ誘導
+          const s2done = window.sessionStorage.getItem("session2Done") === "true";
+          if (s2done) {
+            router.replace("/sessions");
+          } else {
+            router.replace("/s2/impressions");
+          }
+          return;
+        }
+        setCurrentTaskIndex(nextIdx);
+      } catch (e) {
+        console.warn("Failed to load progress for s2", e);
+      } finally {
+        setProgressApplied(true);
+      }
+    };
+    applyProgress();
+  }, [participantId, orderedTasks, progressApplied, router]);
+
+  const persistStage = (idx: number, st: "voice" | "post") => {
+    if (typeof window === "undefined") return;
+    window.sessionStorage.setItem(PROGRESS_IDX_KEY, String(idx));
+    window.sessionStorage.setItem(PROGRESS_STAGE_KEY, st);
+  };
 
   const currentTask = orderedTasks[currentTaskIndex];
   const currentNote = customNotes[currentTaskIndex] || "";
@@ -242,6 +310,7 @@ export default function Session2Page() {
     setAudioFinished(false);
     setVoiceCompleted(false);
     setStage("voice");
+    persistStage(currentTaskIndex + 1, "voice");
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
@@ -253,6 +322,8 @@ export default function Session2Page() {
     if (sessionActive) return;
     setVoiceCompleted(true);
     setStage("post");
+    // このタスクのポストアンケから再開できるように保持（完了送信時に次タスクへ進める）
+    persistStage(currentTaskIndex, "post");
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
@@ -312,7 +383,12 @@ export default function Session2Page() {
     setPostCompleted(completedNext);
     if (currentTaskIndex >= orderedTasks.length - 1) {
       router.push("/s2/impressions");
+      if (typeof window !== "undefined") {
+        window.sessionStorage.removeItem(PROGRESS_IDX_KEY);
+        window.sessionStorage.removeItem(PROGRESS_STAGE_KEY);
+      }
     } else {
+      persistStage(currentTaskIndex + 1, "voice");
       handleNextTask(true);
     }
   };
@@ -336,6 +412,10 @@ export default function Session2Page() {
       });
     }, 1000);
   };
+
+  if (!canAccess) {
+    return null;
+  }
 
   return (
     <div className="w-full max-w-3xl mx-auto px-4 py-10 space-y-6">

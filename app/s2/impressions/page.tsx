@@ -51,6 +51,9 @@ export default function ImpressionsPage() {
         alert("送信に失敗しました。もう一度お試しください。");
         return;
       }
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem("session2Done", "true");
+      }
       router.push("/s2/complete");
     } catch (e) {
       console.error("s2 impressions submit error", e);

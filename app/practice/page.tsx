@@ -13,10 +13,10 @@ import VoicePanel from "@/components/voice-panel";
 const STORAGE_KEY_PRACTICE_DONE = "practiceDone";
 
 const practiceTask = {
-  title: "練習: ダークチョコレートについて",
+  title: "練習: 誕生日会で振る舞う料理を決める",
   condition: "PRACTICE",
   scenario:
-    "あなたは、ダークチョコレートについて関心を持ち、情報を調べることにしました。ダークチョコレートとは何か、どのような特徴があるのかについて調べてください。また、健康への影響や、どの程度の量を摂取するのが適切かなど、気になる点についても情報を調べながら理解を深めてください。必要に応じて、価格や購入のしやすさなどについても調べても構いません。",
+    "あなたは，来月の知人の誕生日会で振る舞う料理を準備することになりました。何を作るか，またどのように作るかについて，音声対話システムで調べながら検討してください。レシピ，材料，調理手順，準備のしやすさなどを調べながら，どの料理が適しているかを考えてください。",
 };
 
 export default function PracticePage() {
@@ -141,6 +141,10 @@ export default function PracticePage() {
     router.push("/sessions");
   };
 
+  const scenarioWithReplacement = note.trim()
+    ? practiceTask.scenario.replace(/知人/g, note.trim())
+    : practiceTask.scenario;
+
   return (
     <div className="w-full max-w-2xl mx-auto px-4 py-10 space-y-6">
       {participantId && (
@@ -167,7 +171,7 @@ export default function PracticePage() {
               <Badge variant="outline">{practiceTask.condition}</Badge>
             </div>
             <p className="text-sm text-foreground mt-2 leading-6 font-medium">
-              {practiceTask.scenario}
+              {scenarioWithReplacement}
             </p>
           </div>
           {stage === "voice" && remainingTime !== null && (
@@ -178,14 +182,14 @@ export default function PracticePage() {
         </div>
         {stage === "survey" && (
           <div className="space-y-2">
-            <p className="text-sm font-medium">トピック: 自由記述</p>
+            <p className="text-sm font-medium">振る舞う相手（知人）を入力してください</p>
             <Textarea
               value={note}
               onChange={(e) => {
                 setNote(e.target.value);
                 setNoteSaved(false);
               }}
-              placeholder="例: 何を調べたいか、気になっている点など"
+              placeholder="例: 祖母 / 同僚 / 友人"
             />
             <div className="flex justify-end">
               <Button size="sm" variant="outline" onClick={handleSaveNote}>
@@ -200,7 +204,7 @@ export default function PracticePage() {
         <div className="space-y-4">
           <TaskSurvey
             topic={practiceTask.title}
-            scenario={practiceTask.scenario}
+            scenario={scenarioWithReplacement}
             onSubmit={handleSurveySubmit}
           />
         </div>

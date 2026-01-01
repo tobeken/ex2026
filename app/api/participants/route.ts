@@ -113,6 +113,29 @@ export async function POST(req: Request) {
         ),
       );
 
+      // PlaybackAsset も participant × task × condition でプレースホルダを用意しておく
+      await Promise.all(
+        assignments.map((a) =>
+          tx.playbackAsset.upsert({
+            where: {
+              participantId_taskId_conditionId: {
+                participantId: participant.id,
+                taskId: a.taskId,
+                conditionId: a.conditionId,
+              },
+            },
+            // 既存がある場合は audioUrl を上書きしない（手動セットを維持）
+            update: {},
+            create: {
+              participantId: participant.id,
+              taskId: a.taskId,
+              conditionId: a.conditionId,
+              audioUrl: "",
+            },
+          }),
+        ),
+      );
+
       return participant;
     });
 

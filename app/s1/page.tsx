@@ -219,7 +219,10 @@ export default function Session1Page() {
       return currentTask.scenario.replace("お世話になっている人", currentNote);
     }
     if (currentTask.taskId === "WEEKEND_TRIP") {
-      return currentTask.scenario.replace("旅行", currentNote);
+      return currentTask.scenario
+        .replace(/短期旅行/g, `短期${currentNote}旅行`)
+        .replace(/休日旅行/g, `${currentNote}旅行`)
+        .replace(/旅行/g, `${currentNote}旅行`);
     }
     return currentTask.scenario;
   })();

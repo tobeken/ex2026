@@ -49,7 +49,7 @@ export default function SessionsPage() {
         <div>
           <p className="text-lg font-medium">練習タスク</p>
           <p className="text-sm text-muted-foreground">
-            ダークチョコレートについて（アンケート → 音声対話 → アンケート）
+            誕生日会の料理準備について（アンケート → 音声対話 → アンケート）
           </p>
         </div>
         <Button asChild disabled={!hasId} variant="outline">

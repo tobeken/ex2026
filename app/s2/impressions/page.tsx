@@ -9,11 +9,11 @@ import { useRouter } from "next/navigation";
 export default function ImpressionsPage() {
   const router = useRouter();
   const [participantId, setParticipantId] = useState("");
-  const [notes, setNotes] = useState({
-    t1: "",
-    t2: "",
-    t3: "",
-  });
+  const [q1, setQ1] = useState<string[]>([]);
+  const [q2, setQ2] = useState<string[]>([]);
+  const [q3, setQ3] = useState("");
+  const [q4, setQ4] = useState<number>(0);
+  const [audioFeelings, setAudioFeelings] = useState({ a1: "", a2: "", a3: "" });
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -23,12 +23,12 @@ export default function ImpressionsPage() {
   }, []);
 
   const handleSubmit = async () => {
-    if (!notes.t1.trim() || !notes.t2.trim() || !notes.t3.trim()) {
-      alert("各タスクの感想を入力してください。");
-      return;
-    }
     if (!participantId) {
       alert("参加者IDがありません。ログインからやり直してください。");
+      return;
+    }
+    if (!audioFeelings.a1.trim() || !audioFeelings.a2.trim() || !audioFeelings.a3.trim()) {
+      alert("各タスクの検索前音声の感想を入力してください。");
       return;
     }
 
@@ -42,7 +42,13 @@ export default function ImpressionsPage() {
           taskId: "S2_IMPRESSIONS",
           stage: "impressions",
           condition: "NONE",
-          answers: notes,
+          answers: {
+            q1,
+            q2,
+            q3,
+            q4,
+            audioFeelings,
+          },
         }),
       });
       if (!res.ok) {
@@ -63,35 +69,148 @@ export default function ImpressionsPage() {
 
   return (
     <div className="w-full max-w-3xl mx-auto px-4 py-10 space-y-6">
-      <h1 className="text-2xl font-semibold">検索過程の感想（タスク1〜3）</h1>
+      <h1 className="text-2xl font-semibold">以下のアンケートに回答してください</h1>
       <Card className="p-4 space-y-4">
         <div className="space-y-2">
-          <p className="text-sm font-semibold">タスク1の感想</p>
+          <p className="text-sm font-semibold">
+            Q1. 利用したことのある音声対話型検索システムについて教えてください（複数選択可）
+          </p>
+          <div className="flex flex-col gap-2 text-sm">
+            {["Alexa", "GoogleHome", "Siri", "その他", "利用したことがない"].map((label) => (
+              <label key={label} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  value={label}
+                  checked={q1.includes(label)}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setQ1((prev) =>
+                      checked ? [...prev, label] : prev.filter((v) => v !== label)
+                    );
+                  }}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-sm font-semibold">
+            Q2. 音声対話型検索システムの利用目的について教えてください（複数選択可）
+          </p>
+          <div className="flex flex-col gap-2 text-sm">
+            {[
+              "天気予報の確認",
+              "音楽を聴く",
+              "音声入力",
+              "テキストやメールの送信",
+              "交通情報",
+              "家電のコントロール",
+              "デスクトップと同じ情報検索",
+              "使ったことがないのでわからない",
+              "その他",
+            ].map((label) => (
+              <label key={label} className="flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  value={label}
+                  checked={q2.includes(label)}
+                  onChange={(e) => {
+                    const checked = e.target.checked;
+                    setQ2((prev) =>
+                      checked ? [...prev, label] : prev.filter((v) => v !== label)
+                    );
+                  }}
+                />
+                {label}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-sm font-semibold">
+            Q3. 音声対話型検索システムの利用頻度について教えてください
+          </p>
+          <div className="flex flex-col gap-2 text-sm">
+            {["毎日", "週4〜5回", "週2〜3回", "週1回", "その他", "使ったことがない"].map(
+              (label, idx) => (
+                <label key={label} className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="q3"
+                    value={label}
+                    checked={q3 === label}
+                    onChange={(e) => setQ3(e.target.value)}
+                  />
+                  {label}
+                </label>
+              )
+            )}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-sm font-semibold">
+            Q4. 音声対話型検索システムへの信頼度について5段階で教えてください
+          </p>
+          <div className="flex flex-wrap gap-3 text-sm">
+            {[
+              [1, "全く信頼していない"],
+              [2, "あまり信頼していない"],
+              [3, "どちらでもない"],
+              [4, "まあ信頼している"],
+              [5, "とても信頼している"],
+            ].map(([val, label]) => (
+              <label key={val} className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="q4"
+                    value={val}
+                    checked={q4 === val}
+                    onChange={(e) => setQ4(Number(e.target.value))}
+                  />
+                  {label}
+                </label>
+              ))}
+          </div>
+        </div>
+
+        <div className="space-y-2 pt-2">
+          <p className="text-sm font-semibold">
+            タスク1の検索前の音声再生について感じたことを自由に記述してください
+          </p>
           <Textarea
-            value={notes.t1}
-            onChange={(e) => setNotes((prev) => ({ ...prev, t1: e.target.value }))}
-            placeholder="箇条書きで記入してください"
-            className="min-h-[120px]"
+            value={audioFeelings.a1}
+            onChange={(e) => setAudioFeelings((prev) => ({ ...prev, a1: e.target.value }))}
+            placeholder="自由記述"
+            className="min-h-[80px]"
           />
         </div>
         <div className="space-y-2">
-          <p className="text-sm font-semibold">タスク2の感想</p>
+          <p className="text-sm font-semibold">
+            タスク2の検索前の音声再生について感じたことを自由に記述してください
+          </p>
           <Textarea
-            value={notes.t2}
-            onChange={(e) => setNotes((prev) => ({ ...prev, t2: e.target.value }))}
-            placeholder="箇条書きで記入してください"
-            className="min-h-[120px]"
+            value={audioFeelings.a2}
+            onChange={(e) => setAudioFeelings((prev) => ({ ...prev, a2: e.target.value }))}
+            placeholder="自由記述"
+            className="min-h-[80px]"
           />
         </div>
         <div className="space-y-2">
-          <p className="text-sm font-semibold">タスク3の感想</p>
+          <p className="text-sm font-semibold">
+            タスク3の検索前の音声再生について感じたことを自由に記述してください
+          </p>
           <Textarea
-            value={notes.t3}
-            onChange={(e) => setNotes((prev) => ({ ...prev, t3: e.target.value }))}
-            placeholder="箇条書きで記入してください"
-            className="min-h-[120px]"
+            value={audioFeelings.a3}
+            onChange={(e) => setAudioFeelings((prev) => ({ ...prev, a3: e.target.value }))}
+            placeholder="自由記述"
+            className="min-h-[80px]"
           />
         </div>
+
         <div className="flex justify-end">
           <Button onClick={handleSubmit}>送信</Button>
         </div>

@@ -16,7 +16,7 @@ const geistSans = Geist({
 });
 
 export const metadata: Metadata = {
-  title: "Next.js + OpenAI Realtime API (WebRTC)",
+  title: "Conversational AI Experiment",
   description: "Next.js Starter for using the OpenAI Realtime API WebRTC method. Starter showcases capabilities of OpenAI's latest Realtime API (12/17/2024). It has all shadcn/ui components to build your own real-time voice AI application. Fastest & latest way to do Voice AI (Dec 2024), implementing API advancements of Day of OpenAI's 12 days of Christmas.",
   authors: [{ name: siteConfig.author, url: siteConfig.links.twitter }],
   creator: siteConfig.author,

@@ -11,6 +11,12 @@ type VoicePanelProps = {
   title?: string;
   onSessionStateChange?: (active: boolean) => void;
   onStart?: () => void;
+  onStop?: () => void;
+  onUserSpeechFinal?: (text: string, startedAt: number, endedAt: number) => void;
+  onUserSpeechStart?: (ts: number) => void;
+  onUserSpeechEnd?: (ts: number) => void;
+  onAssistantSpeechStart?: (ts: number) => void;
+  onAssistantSpeechEnd?: (text: string, startedAt: number, endedAt: number) => void;
 };
 
 export function VoicePanel({
@@ -19,6 +25,12 @@ export function VoicePanel({
   title = "Voice Session",
   onSessionStateChange,
   onStart,
+  onStop,
+  onUserSpeechFinal,
+  onUserSpeechStart,
+  onUserSpeechEnd,
+  onAssistantSpeechStart,
+  onAssistantSpeechEnd,
 }: VoicePanelProps) {
   const {
     status,
@@ -27,7 +39,13 @@ export function VoicePanel({
     stopSession,
     currentVolume,
     isMicActive,
-  } = useWebRTCAudioSession(voice);
+  } = useWebRTCAudioSession(voice, undefined, {
+    onUserSpeechFinal,
+    onUserSpeechStart,
+    onUserSpeechEnd,
+    onAssistantSpeechStart,
+    onAssistantSpeechEnd,
+  });
 
   useEffect(() => {
     onSessionStateChange?.(isSessionActive);
@@ -45,6 +63,7 @@ export function VoicePanel({
 
   const handleStop = () => {
     if (!isSessionActive) return;
+    onStop?.();
     stopSession();
   };
 

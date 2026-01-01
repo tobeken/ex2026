@@ -35,6 +35,9 @@ model Participant {
   assignments    Assignment[]
   playbackAssets PlaybackAsset[]
   surveyResponses SurveyResponse[]
+  conversationTurns ConversationTurn[]
+  conversationTimings ConversationTiming[]
+  conversationSummaries ConversationSummary[]
 }
 
 model Assignment {
@@ -88,4 +91,56 @@ model SurveyResponse {
   @@index([participantId])
   @@index([session])
   @@index([taskId])
+}
+
+model ConversationTurn {
+  id            String   @id @default(cuid())
+  participantId String
+  session       String   // "s1" | "s2"
+  taskId        String
+  turnIndex     Int
+  role          String   // "user" | "assistant"
+  text          String?
+  startedAt     DateTime
+  endedAt       DateTime
+  durationMs    Int?
+  createdAt     DateTime @default(now())
+
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@index([participantId])
+  @@index([session, taskId])
+  @@index([participantId, session, taskId, turnIndex])
+}
+
+model ConversationTiming {
+  id            String   @id @default(cuid())
+  participantId String
+  session       String   // "s1" | "s2"
+  taskId        String
+  event         String   // e.g., session_start, session_stop, user_start_talking, etc.
+  timestamp     DateTime
+  extra         Json?
+  createdAt     DateTime @default(now())
+
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@index([participantId])
+  @@index([session, taskId])
+}
+
+model ConversationSummary {
+  id                 String   @id @default(cuid())
+  participantId      String
+  session            String
+  taskId             String
+  userUtteranceCount Int      @default(0)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([participantId, session, taskId])
+  @@index([participantId])
+  @@index([session, taskId])
 }

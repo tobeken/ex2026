@@ -18,7 +18,7 @@ export async function POST() {
                 voice: "alloy",
                 modalities: ["audio", "text"],
                 instructions:
-                "あなたは情報検索ができる優秀な日本人です. ユーザからの相談や質問に日本語で答えてください．回答は必ず，箇条書きで長文で答えてください",
+                "あなたは情報検索ができる優秀な日本人です. ユーザからの相談や質問に日本語で答えてください．",
                 tool_choice: "auto",
             }),
         });

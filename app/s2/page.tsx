@@ -106,6 +106,9 @@ export default function Session2Page() {
   const [progressApplied, setProgressApplied] = useState(false);
   const PROGRESS_IDX_KEY = "s2_currentTaskIndex";
   const PROGRESS_STAGE_KEY = "s2_stage";
+  const [turnIndex, setTurnIndex] = useState(0);
+  const modalSavedAtRef = useRef<number | null>(null);
+  const lastAssistantEndRef = useRef<number | null>(null);
 
   const orderedTasks = useMemo(() => {
     const plan = ASSIGNMENT_PLAN[participantGroup] || ASSIGNMENT_PLAN.G1;
@@ -231,9 +234,58 @@ export default function Session2Page() {
     window.sessionStorage.setItem(PROGRESS_STAGE_KEY, st);
   };
 
+  const postTiming = async (events: { event: string; timestamp?: number; extra?: any }[]) => {
+    if (!participantId || !currentTask) return;
+    try {
+      await fetch("/api/conversation/timing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          events.map((e) => ({
+            participantId,
+            session: "s2",
+            taskId: currentTask.taskId,
+            event: e.event,
+            timestamp: e.timestamp ? new Date(e.timestamp).toISOString() : new Date().toISOString(),
+            extra: e.extra,
+          }))
+        ),
+      });
+    } catch (err) {
+      console.warn("failed to post timing", err);
+    }
+  };
+
+  const postTurns = async (turns: { role: "user" | "assistant"; text?: string; startedAt: number; endedAt: number }[]) => {
+    if (!participantId || !currentTask) return;
+    try {
+      await fetch("/api/conversation/turns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          turns.map((t, idx) => ({
+            participantId,
+            session: "s2",
+            taskId: currentTask.taskId,
+            turnIndex: turnIndex + idx,
+            role: t.role,
+            text: t.text,
+            startedAt: new Date(t.startedAt).toISOString(),
+            endedAt: new Date(t.endedAt).toISOString(),
+          }))
+        ),
+      });
+      setTurnIndex((prev) => prev + turns.length);
+    } catch (err) {
+      console.warn("failed to post turns", err);
+    }
+  };
+
   useEffect(() => {
     const fetchAudio = async () => {
       if (!participantId || !currentTask) return;
+      const modalOpenTs = Date.now();
+      postTiming([{ event: "play_audio_modal_open", timestamp: modalOpenTs }]);
       try {
         const res = await fetch(
           `/api/playback-assets?participantId=${encodeURIComponent(
@@ -401,6 +453,7 @@ export default function Session2Page() {
       alert("音声が設定されていません。");
       return;
     }
+    const startTs = Date.now();
     try {
       if (!audioRef.current) {
         audioRef.current = new Audio();
@@ -408,6 +461,7 @@ export default function Session2Page() {
           setAudioPlaying(false);
           setAudioFinished(true);
           setIsFollowupOpen(true);
+          postTiming([{ event: "play_audio_ended", timestamp: Date.now() }]);
         });
       }
       audioRef.current.src = audioUrl;
@@ -417,6 +471,7 @@ export default function Session2Page() {
       setFollowupDraftNext(followupNextNotes[currentTaskIndex] || "");
       setAudioPlaying(true);
       await audioRef.current.play();
+      postTiming([{ event: "play_audio_started", timestamp: startTs }]);
     } catch (e) {
       console.error("audio play failed", e);
       setAudioPlaying(false);
@@ -448,6 +503,7 @@ export default function Session2Page() {
     setStage("post");
     // このタスクのポストアンケから再開できるように保持（完了送信時に次タスクへ進める）
     persistStage(currentTaskIndex, "post");
+    postTiming([{ event: "session_stop" }]);
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
@@ -470,6 +526,9 @@ export default function Session2Page() {
       stage: "followup",
       answers: { learned: followupDraftPrev, followup: followupDraftNext },
     });
+    const savedAt = Date.now();
+    modalSavedAtRef.current = savedAt;
+    postTiming([{ event: "play_audio_modal_saved", timestamp: savedAt }]);
     setFollowupDraftPrev("");
     setFollowupDraftNext("");
     setIsFollowupOpen(false);
@@ -531,6 +590,12 @@ export default function Session2Page() {
   const handleStartSession = () => {
     setRemainingTime(8 * 60);
     if (timerRef.current) clearInterval(timerRef.current);
+    const now = Date.now();
+    const extra: any = {};
+    if (modalSavedAtRef.current) {
+      extra.playAudioToStartMs = now - modalSavedAtRef.current;
+    }
+    postTiming([{ event: "session_start", timestamp: now, extra }]);
     timerRef.current = setInterval(() => {
       setRemainingTime((prev) => {
         if (prev === null) return null;
@@ -541,6 +606,7 @@ export default function Session2Page() {
           setVoiceCompleted(true);
           setStage("post");
           toast.warning("8分経過しました。アンケートに進んでください。");
+          postTiming([{ event: "session_stop" }]);
           return 0;
         }
         return prev - 1;
@@ -612,12 +678,39 @@ export default function Session2Page() {
 
       {stage === "voice" && (
         <>
-          <VoicePanel
-            title="VoicePanel"
-            canStart={canStart}
-            onSessionStateChange={setSessionActive}
-            onStart={handleStartSession}
-          />
+      <VoicePanel
+        title="VoicePanel"
+        canStart={canStart}
+        onSessionStateChange={setSessionActive}
+        onStart={handleStartSession}
+        onStop={() => {
+          postTiming([{ event: "session_stop" }]);
+        }}
+        onUserSpeechStart={(ts) => {
+          if (lastAssistantEndRef.current) {
+            postTiming([
+              {
+                event: "assistant_end_to_user_start",
+                timestamp: ts,
+                extra: { delayMs: ts - lastAssistantEndRef.current },
+              },
+            ]);
+          }
+        }}
+        onUserSpeechFinal={(text, startedAt, endedAt) => {
+          postTurns([{ role: "user", text, startedAt, endedAt }]);
+        }}
+        onAssistantSpeechStart={(ts) => {
+          // no-op for now
+        }}
+        onAssistantSpeechDelta={(text, startedAt) => {
+          // partial delta, no-op
+        }}
+        onAssistantSpeechEnd={(text, startedAt, endedAt) => {
+          lastAssistantEndRef.current = endedAt;
+          postTurns([{ role: "assistant", text, startedAt, endedAt }]);
+        }}
+      />
           <div className="flex justify-end">
             <Button
               onClick={handleTaskComplete}

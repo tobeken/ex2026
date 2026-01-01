@@ -74,6 +74,8 @@ export default function Session1Page() {
   const router = useRouter();
   const PROGRESS_IDX_KEY = "s1_currentTaskIndex";
   const PROGRESS_STAGE_KEY = "s1_stage";
+  const [turnIndex, setTurnIndex] = useState(0);
+  const lastAssistantEndRef = useRef<number | null>(null);
 
   const orderedTasks = useMemo(() => {
     const plan = ASSIGNMENT_PLAN[participantGroup] || ASSIGNMENT_PLAN.G1;
@@ -181,6 +183,53 @@ export default function Session1Page() {
     setCustomNotes(next);
     if (typeof window !== "undefined") {
       window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    }
+  };
+
+  const postTiming = async (events: { event: string; timestamp?: number; extra?: any }[]) => {
+    if (!participantId || !currentTask) return;
+    try {
+      await fetch("/api/conversation/timing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          events.map((e) => ({
+            participantId,
+            session: "s1",
+            taskId: currentTask.taskId,
+            event: e.event,
+            timestamp: e.timestamp ? new Date(e.timestamp).toISOString() : new Date().toISOString(),
+            extra: e.extra,
+          }))
+        ),
+      });
+    } catch (err) {
+      console.warn("failed to post timing", err);
+    }
+  };
+
+  const postTurns = async (turns: { role: "user" | "assistant"; text?: string; startedAt: number; endedAt: number }[]) => {
+    if (!participantId || !currentTask) return;
+    try {
+      await fetch("/api/conversation/turns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          turns.map((t, idx) => ({
+            participantId,
+            session: "s1",
+            taskId: currentTask.taskId,
+            turnIndex: turnIndex + idx,
+            role: t.role,
+            text: t.text,
+            startedAt: new Date(t.startedAt).toISOString(),
+            endedAt: new Date(t.endedAt).toISOString(),
+          }))
+        ),
+      });
+      setTurnIndex((prev) => prev + turns.length);
+    } catch (err) {
+      console.warn("failed to post turns", err);
     }
   };
 
@@ -294,6 +343,8 @@ export default function Session1Page() {
     setStage("post");
     // このタスクのポストアンケから再開できるように保持（完了送信時に次タスクへ進める）
     persistStage(currentTaskIndex, "post");
+    postTiming([{ event: "session_stop" }]);
+    lastAssistantEndRef.current = null;
   };
 
   const handleSaveNote = () => {
@@ -348,6 +399,7 @@ export default function Session1Page() {
   const handleStartSession = async () => {
     setRemainingTime(8 * 60);
     if (timerRef.current) clearInterval(timerRef.current);
+    postTiming([{ event: "session_start" }]);
     timerRef.current = setInterval(() => {
       setRemainingTime((prev) => {
         if (prev === null) return null;
@@ -357,6 +409,7 @@ export default function Session1Page() {
           setVoiceCompleted(true);
           setStage("post");
           toast.warning("8分経過したため終了しました。アンケートに進んでください。");
+          postTiming([{ event: "session_stop" }]);
           return 0;
         }
         return prev - 1;
@@ -445,6 +498,30 @@ export default function Session1Page() {
             title={`VoicePanel - ${currentTask.title}`}
             onSessionStateChange={setSessionActive}
             onStart={handleStartSession}
+            onStop={() => {
+              postTiming([{ event: "session_stop" }]);
+            }}
+            onUserSpeechStart={(ts) => {
+              if (lastAssistantEndRef.current) {
+                postTiming([
+                  {
+                    event: "assistant_end_to_user_start",
+                    timestamp: ts,
+                    extra: { delayMs: ts - lastAssistantEndRef.current },
+                  },
+                ]);
+              }
+            }}
+            onUserSpeechFinal={(text, startedAt, endedAt) => {
+              postTurns([{ role: "user", text, startedAt, endedAt }]);
+            }}
+            onAssistantSpeechStart={(ts) => {
+              // no-op
+            }}
+            onAssistantSpeechEnd={(text, startedAt, endedAt) => {
+              lastAssistantEndRef.current = endedAt;
+              postTurns([{ role: "assistant", text, startedAt, endedAt }]);
+            }}
           />
           <div className="flex justify-end">
             <Button

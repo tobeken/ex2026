@@ -8,14 +8,17 @@ import { Badge } from "@/components/ui/badge";
 
 export default function SessionsPage() {
   const [participantId, setParticipantId] = useState("");
-  const [practiceDone, setPracticeDone] = useState(false);
+  const [session1Done, setSession1Done] = useState(false);
+  const [session2Done, setSession2Done] = useState(false);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       const stored = window.sessionStorage.getItem("participantId") || "";
       setParticipantId(stored);
-      const practiced = window.sessionStorage.getItem("practiceDone") === "true";
-      setPracticeDone(practiced);
+      const s1done = window.sessionStorage.getItem("session1Done") === "true";
+      setSession1Done(s1done);
+      const s2done = window.sessionStorage.getItem("session2Done") === "true";
+      setSession2Done(s2done);
     }
   }, []);
 
@@ -49,7 +52,7 @@ export default function SessionsPage() {
             ダークチョコレートについて（アンケート → 音声対話 → アンケート）
           </p>
         </div>
-        <Button asChild disabled={!hasId || practiceDone} variant="outline">
+        <Button asChild disabled={!hasId} variant="outline">
           <Link href="/practice">練習へ</Link>
         </Button>
       </Card>
@@ -60,8 +63,8 @@ export default function SessionsPage() {
             <p className="text-lg font-medium">Session 1</p>
             <p className="text-sm text-muted-foreground">3タスク（1回目）</p>
           </div>
-          <Button asChild disabled={!hasId}>
-            <Link href="/s1">Session1へ</Link>
+          <Button asChild disabled={!hasId || session1Done} variant={session1Done ? "secondary" : "default"}>
+            <Link href="/s1">{session1Done ? "完了済み" : "Session1へ"}</Link>
           </Button>
         </Card>
 
@@ -70,8 +73,18 @@ export default function SessionsPage() {
             <p className="text-lg font-medium">Session 2</p>
             <p className="text-sm text-muted-foreground">3タスク（2回目）</p>
           </div>
-          <Button asChild disabled={!hasId} variant="secondary">
-            <Link href="/s2">Session2へ</Link>
+          <Button
+            asChild
+            disabled={!hasId || !session1Done || session2Done}
+            variant={!session1Done ? "secondary" : session2Done ? "secondary" : "default"}
+          >
+            <Link href="/s2">
+              {!session1Done
+                ? "Session1完了後"
+                : session2Done
+                ? "完了済み"
+                : "Session2へ"}
+            </Link>
           </Button>
         </Card>
       </div>

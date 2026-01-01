@@ -62,7 +62,7 @@ export default function Session1Page() {
   const [participantGroup, setParticipantGroup] = useState<GroupId>("G1");
   const [currentTaskIndex, setCurrentTaskIndex] = useState(0);
   const [sessionActive, setSessionActive] = useState(false);
-  const [stage, setStage] = useState<"survey" | "voice">("survey");
+  const [stage, setStage] = useState<"survey" | "voice" | "post">("survey");
   const [voiceCompleted, setVoiceCompleted] = useState(false);
   const [customNotes, setCustomNotes] = useState<string[]>(() => ["", "", ""]);
   const [noteSaved, setNoteSaved] = useState<boolean[]>(() => [false, false, false]);
@@ -70,7 +70,10 @@ export default function Session1Page() {
     () => [{ q1: "", q2: "" }, { q1: "", q2: "" }, { q1: "", q2: "" }]
   );
   const [postCompleted, setPostCompleted] = useState<boolean[]>(() => [false, false, false]);
+  const [progressApplied, setProgressApplied] = useState(false);
   const router = useRouter();
+  const PROGRESS_IDX_KEY = "s1_currentTaskIndex";
+  const PROGRESS_STAGE_KEY = "s1_stage";
 
   const orderedTasks = useMemo(() => {
     const plan = ASSIGNMENT_PLAN[participantGroup] || ASSIGNMENT_PLAN.G1;
@@ -83,6 +86,11 @@ export default function Session1Page() {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
+      const s1done = window.sessionStorage.getItem("session1Done") === "true";
+      if (s1done) {
+        router.replace("/sessions");
+        return;
+      }
       const stored = window.sessionStorage.getItem("participantId") || "";
       setParticipantId(stored);
       const storedGroup =
@@ -120,6 +128,54 @@ export default function Session1Page() {
     );
     setPostCompleted((prev) => orderedTasks.map((_, idx) => !!prev[idx]));
   }, [orderedTasks]);
+
+  useEffect(() => {
+    const applyProgress = async () => {
+      if (!participantId || orderedTasks.length === 0 || progressApplied) return;
+      // 1) 進行中ステージをsessionStorageから復元
+      if (typeof window !== "undefined") {
+        const storedIdx = Number(window.sessionStorage.getItem(PROGRESS_IDX_KEY) || "0");
+          const storedStage =
+          (window.sessionStorage.getItem(PROGRESS_STAGE_KEY) as "survey" | "voice" | "post" | null) ||
+          null;
+          if (!Number.isNaN(storedIdx) && storedIdx >= 0 && storedIdx < orderedTasks.length) {
+            setCurrentTaskIndex(storedIdx);
+          if (storedStage === "voice" || storedStage === "post") {
+            setStage(storedStage);
+          }
+          }
+        }
+
+      try {
+        const res = await fetch(
+          `/api/surveys?participantId=${encodeURIComponent(participantId)}&session=s1&stage=post`
+        );
+        if (!res.ok) return;
+        const data: { taskId?: string }[] = await res.json();
+        const completedIds = new Set(
+          data.filter((r) => r.taskId).map((r) => r.taskId as string)
+        );
+        const nextIdx = orderedTasks.findIndex((t) => !completedIds.has(t.taskId));
+        if (nextIdx === -1) {
+          window.sessionStorage.setItem("session1Done", "true");
+          router.replace("/s1/demographics");
+          return;
+        }
+        setCurrentTaskIndex(nextIdx);
+      } catch (e) {
+        console.warn("Failed to load progress for s1", e);
+      } finally {
+        setProgressApplied(true);
+      }
+    };
+    applyProgress();
+  }, [participantId, orderedTasks, progressApplied, router]);
+
+  const persistStage = (idx: number, st: "survey" | "voice" | "post") => {
+    if (typeof window === "undefined") return;
+    window.sessionStorage.setItem(PROGRESS_IDX_KEY, String(idx));
+    window.sessionStorage.setItem(PROGRESS_STAGE_KEY, st);
+  };
 
   const persistNotes = (next: string[]) => {
     setCustomNotes(next);
@@ -205,6 +261,7 @@ export default function Session1Page() {
     setCurrentTaskIndex((idx) => Math.min(idx + 1, orderedTasks.length - 1));
     setStage("survey");
     setVoiceCompleted(false);
+    persistStage(Math.min(currentTaskIndex + 1, orderedTasks.length - 1), "survey");
   };
 
   const handleSurveySubmit = (answers: Record<string, string>) => {
@@ -220,6 +277,7 @@ export default function Session1Page() {
       },
     });
     setStage("voice");
+    persistStage(currentTaskIndex, "voice");
   };
 
   const handleTaskComplete = () => {
@@ -231,6 +289,8 @@ export default function Session1Page() {
       setRemainingTime(null);
     }
     setStage("post");
+    // このタスクのポストアンケから再開できるように保持（完了送信時に次タスクへ進める）
+    persistStage(currentTaskIndex, "post");
   };
 
   const handleSaveNote = () => {
@@ -269,9 +329,15 @@ export default function Session1Page() {
     completedNext[currentTaskIndex] = true;
     setPostCompleted(completedNext);
     if (currentTaskIndex >= orderedTasks.length - 1) {
+      if (typeof window !== "undefined") {
+        window.sessionStorage.setItem("session1Done", "true");
+        window.sessionStorage.removeItem(PROGRESS_IDX_KEY);
+        window.sessionStorage.removeItem(PROGRESS_STAGE_KEY);
+      }
       toast.success("すべてのタスクが完了しました");
       router.push("/s1/demographics");
     } else {
+      persistStage(currentTaskIndex + 1, "survey");
       handleNextTask(true);
     }
   };

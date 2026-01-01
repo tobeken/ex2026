@@ -13,6 +13,12 @@ const createSchema = z.object({
   answers: z.any(),
 });
 
+const querySchema = z.object({
+  participantId: z.string().optional(),
+  session: z.string().optional(),
+  stage: z.string().optional(),
+});
+
 export async function POST(req: Request) {
   try {
     const json = await req.json();
@@ -38,5 +44,36 @@ export async function POST(req: Request) {
     const msg = error instanceof Error ? error.message : String(error ?? "Unknown error");
     console.error("POST /api/surveys error", msg);
     return NextResponse.json({ error: "Failed to store survey", detail: msg }, { status: 500 });
+  }
+}
+
+export async function GET(req: Request) {
+  try {
+    const url = new URL(req.url);
+    const query = querySchema.parse({
+      participantId: url.searchParams.get("participantId") ?? undefined,
+      session: url.searchParams.get("session") ?? undefined,
+      stage: url.searchParams.get("stage") ?? undefined,
+    });
+
+    const where: Record<string, any> = {};
+    if (query.participantId) where.participantId = query.participantId;
+    if (query.session) where.session = query.session;
+    if (query.stage) where.stage = query.stage;
+
+    const responses = await prisma.surveyResponse.findMany({
+      where,
+      orderBy: { createdAt: "asc" },
+    });
+
+    return NextResponse.json(responses);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      console.error("GET /api/surveys validation error", error.issues);
+      return NextResponse.json({ error: error.issues }, { status: 400 });
+    }
+    const msg = error instanceof Error ? error.message : String(error ?? "Unknown error");
+    console.error("GET /api/surveys error", msg);
+    return NextResponse.json({ error: "Failed to fetch surveys", detail: msg }, { status: 500 });
   }
 }

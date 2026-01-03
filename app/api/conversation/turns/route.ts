@@ -11,6 +11,7 @@ const turnSchema = z.object({
   turnIndex: z.number().int(),
   role: z.enum(["user", "assistant"]),
   text: z.string().optional(),
+  audioUrl: z.string().optional(),
   startedAt: z.string().or(z.date()),
   endedAt: z.string().or(z.date()),
 });
@@ -29,17 +30,36 @@ export async function POST(req: Request) {
       turnIndex: t.turnIndex,
       role: t.role,
       text: t.text ?? null,
+      audioUrl: t.audioUrl ?? null,
       startedAt: new Date(t.startedAt),
       endedAt: new Date(t.endedAt),
       durationMs: new Date(t.endedAt).getTime() - new Date(t.startedAt).getTime(),
     }));
 
+    // 直前のロールを取得し、assistant連続を1クエリとみなしてカウント
+    const first = data[0];
+    const lastTurn = await prisma.conversationTurn.findFirst({
+      where: {
+        participantId: first.participantId,
+        session: first.session,
+        taskId: first.taskId,
+      },
+      orderBy: { turnIndex: "desc" },
+      select: { role: true },
+    });
+
     await prisma.conversationTurn.createMany({ data });
 
-    // user発話数をサマリに反映
-    const userCount = data.filter((d) => d.role === "user").length;
-    if (userCount > 0) {
-      const first = data[0];
+    let prevRole: string | null = lastTurn?.role ?? null;
+    let assistantStarts = 0;
+    for (const t of data) {
+      if (t.role === "assistant" && prevRole !== "assistant") {
+        assistantStarts += 1;
+      }
+      prevRole = t.role;
+    }
+
+    if (assistantStarts > 0) {
       await prisma.conversationSummary.upsert({
         where: {
           participantId_session_taskId: {
@@ -48,12 +68,12 @@ export async function POST(req: Request) {
             taskId: first.taskId,
           },
         },
-        update: { userUtteranceCount: { increment: userCount } },
+        update: { userUtteranceCount: { increment: assistantStarts } },
         create: {
           participantId: first.participantId,
           session: first.session,
           taskId: first.taskId,
-          userUtteranceCount: userCount,
+          userUtteranceCount: assistantStarts,
         },
       });
     }

@@ -15,6 +15,8 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { uploadAudio } from "@/lib/upload-audio";
+import { startRecorder, stopRecorder, type ActiveRecorder } from "@/lib/recorder";
 
 type TaskId = "BIRTHDAY_GIFT" | "FAREWELL_PARTY" | "WEEKEND_TRIP";
 type GroupId = "G1" | "G2" | "G3";
@@ -110,6 +112,10 @@ export default function Session2Page() {
   const modalSavedAtRef = useRef<number | null>(null);
   const lastAssistantEndRef = useRef<number | null>(null);
   const [timerStarted, setTimerStarted] = useState(false);
+  const combinedStreamGetterRef = useRef<() => MediaStream | null>(() => null);
+  const fullRecorderRef = useRef<ActiveRecorder | null>(null);
+  const fullStartedAtRef = useRef<number | null>(null);
+  const [fullRecordingActive, setFullRecordingActive] = useState(false);
   const [timerStarted, setTimerStarted] = useState(false);
 
   const orderedTasks = useMemo(() => {
@@ -185,6 +191,12 @@ export default function Session2Page() {
   }, [orderedTasks]);
 
   useEffect(() => {
+    if (sessionActive) {
+      startFullRecording();
+    }
+  }, [sessionActive]);
+
+  useEffect(() => {
     const applyProgress = async () => {
       if (!participantId || orderedTasks.length === 0 || progressApplied) return;
       // 1) sessionStorage から進行中ステージ復元
@@ -236,6 +248,64 @@ export default function Session2Page() {
     window.sessionStorage.setItem(PROGRESS_STAGE_KEY, st);
   };
 
+  const startFullRecording = () => {
+    if (fullRecorderRef.current) return;
+    const stream = combinedStreamGetterRef.current?.();
+    if (!stream) {
+      console.warn("full recording start skipped: no combined stream");
+      return;
+    }
+    try {
+      fullRecorderRef.current = startRecorder(stream);
+      fullStartedAtRef.current = Date.now();
+      setFullRecordingActive(true);
+    } catch (e) {
+      console.warn("full recording start failed", e);
+    }
+  };
+
+  const stopFullRecordingAndUpload = async () => {
+    if (!fullRecorderRef.current) return;
+    const startedAt = fullStartedAtRef.current ?? Date.now();
+    const endedAt = Date.now();
+    let blob: Blob | null = null;
+    try {
+      blob = await stopRecorder(fullRecorderRef.current);
+    } catch (e) {
+      console.warn("full recording stop failed", e);
+    }
+    fullRecorderRef.current = null;
+    fullStartedAtRef.current = null;
+    setFullRecordingActive(false);
+    if (!blob) return;
+    if (blob.size === 0) {
+      console.warn("full recording blob size 0, skip upload");
+      return;
+    }
+    let audioUrl: string | undefined = undefined;
+    try {
+      audioUrl =
+        (await uploadAudio({
+          participantId,
+          taskId: currentTask.taskId,
+          session: "s2",
+          turnId: `full-${Date.now()}`,
+          role: "user",
+          file: blob,
+        })) || undefined;
+    } catch (e) {
+      console.warn("full recording upload failed", e);
+    }
+    postTurns([
+      {
+        role: "user",
+        text: "(full session audio)",
+        startedAt,
+        endedAt,
+        audioUrl,
+      },
+    ]);
+  };
   const postTiming = async (events: { event: string; timestamp?: number; extra?: any }[]) => {
     if (!participantId || !currentTask) return;
     try {
@@ -258,7 +328,7 @@ export default function Session2Page() {
     }
   };
 
-  const postTurns = async (turns: { role: "user" | "assistant"; text?: string; startedAt: number; endedAt: number }[]) => {
+  const postTurns = async (turns: { role: "user" | "assistant"; text?: string; startedAt: number; endedAt: number; audioUrl?: string }[]) => {
     if (!participantId || !currentTask) return;
     try {
       await fetch("/api/conversation/turns", {
@@ -494,12 +564,14 @@ export default function Session2Page() {
     setTimerStarted(false);
     setRemainingTime(null);
     setStage("voice");
+    stopFullRecordingAndUpload();
     persistStage(currentTaskIndex + 1, "voice");
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
     }
     setRemainingTime(null);
+    stopFullRecordingAndUpload();
   };
 
   const handleTaskComplete = () => {
@@ -518,6 +590,7 @@ export default function Session2Page() {
       timerRef.current = null;
     }
     setRemainingTime(null);
+    stopFullRecordingAndUpload();
   };
 
   const handleFollowupSave = () => {
@@ -597,40 +670,39 @@ export default function Session2Page() {
   };
 
   const handleStartSession = () => {
-    if (!timerRef.current) {
-      setTimerStarted(true);
-      setRemainingTime((prev) => (prev === null ? 8 * 60 : prev));
-      if (timerRef.current) clearInterval(timerRef.current);
-      const now = Date.now();
-      const extra: any = {};
-      if (modalSavedAtRef.current) {
-        extra.playAudioToStartMs = now - modalSavedAtRef.current;
-      }
-      if (taskStartAtRef.current === null) {
-        taskStartAtRef.current = now;
-        postTiming([{ event: "session_start", timestamp: now, extra }]);
-      }
-      timerRef.current = setInterval(() => {
-        setRemainingTime((prev) => {
-          if (prev === null) return null;
-          if (prev <= 1) {
-            clearInterval(timerRef.current as NodeJS.Timeout);
-            timerRef.current = null;
-            setRemainingTime(0);
-            setVoiceCompleted(true);
-            setTimerStarted(false);
-            setStage("post");
-            toast.warning("8分経過しました。アンケートに進んでください。");
-            const started = taskStartAtRef.current ?? Date.now() - 8 * 60 * 1000;
-            const durationMs = Math.min(8 * 60 * 1000, Date.now() - started);
-            postTiming([{ event: "session_stop", extra: { searchDurationMs: durationMs } }]);
-            taskStartAtRef.current = null;
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
+    if (timerRef.current) return;
+    setTimerStarted(true);
+    setRemainingTime((prev) => (prev === null ? 8 * 60 : prev));
+    startFullRecording();
+    const now = Date.now();
+    const extra: any = {};
+    if (modalSavedAtRef.current) {
+      extra.playAudioToStartMs = now - modalSavedAtRef.current;
     }
+    if (taskStartAtRef.current === null) {
+      taskStartAtRef.current = now;
+      postTiming([{ event: "session_start", timestamp: now, extra }]);
+    }
+    timerRef.current = setInterval(() => {
+      setRemainingTime((prev) => {
+        if (prev === null) return null;
+        if (prev <= 1) {
+          clearInterval(timerRef.current as NodeJS.Timeout);
+          timerRef.current = null;
+          setRemainingTime(0);
+          setVoiceCompleted(true);
+          setTimerStarted(false);
+          setStage("post");
+          toast.warning("8分経過しました。アンケートに進んでください。");
+          const started = taskStartAtRef.current ?? Date.now() - 8 * 60 * 1000;
+          const durationMs = Math.min(8 * 60 * 1000, Date.now() - started);
+          postTiming([{ event: "session_stop", extra: { searchDurationMs: durationMs } }]);
+          taskStartAtRef.current = null;
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
   };
 
   if (!canAccess) {
@@ -704,6 +776,7 @@ export default function Session2Page() {
         onStart={handleStartSession}
         onStop={() => {
           postTiming([{ event: "session_stop" }]);
+          stopFullRecordingAndUpload();
         }}
         onUserSpeechStart={(ts) => {
           if (lastAssistantEndRef.current) {
@@ -725,9 +798,12 @@ export default function Session2Page() {
         onAssistantSpeechDelta={(text, startedAt) => {
           // partial delta, no-op
         }}
-        onAssistantSpeechEnd={(text, startedAt, endedAt) => {
-          lastAssistantEndRef.current = endedAt;
-          postTurns([{ role: "assistant", text, startedAt, endedAt }]);
+          onAssistantSpeechEnd={(text, startedAt, endedAt) => {
+            lastAssistantEndRef.current = endedAt;
+            postTurns([{ role: "assistant", text, startedAt, endedAt }]);
+          }}
+        onCombinedStreamReady={(getter) => {
+          combinedStreamGetterRef.current = getter;
         }}
       />
           <div className="flex justify-end">

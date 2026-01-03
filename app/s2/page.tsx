@@ -112,6 +112,7 @@ export default function Session2Page() {
   const modalSavedAtRef = useRef<number | null>(null);
   const lastAssistantEndRef = useRef<number | null>(null);
   const [timerStarted, setTimerStarted] = useState(false);
+  const taskStartAtRef = useRef<number | null>(null);
   const combinedStreamGetterRef = useRef<() => MediaStream | null>(() => null);
   const fullRecorderRef = useRef<ActiveRecorder | null>(null);
   const fullStartedAtRef = useRef<number | null>(null);
@@ -793,9 +794,6 @@ export default function Session2Page() {
         }}
         onAssistantSpeechStart={(ts) => {
           // no-op for now
-        }}
-        onAssistantSpeechDelta={(text, startedAt) => {
-          // partial delta, no-op
         }}
           onAssistantSpeechEnd={(text, startedAt, endedAt) => {
             lastAssistantEndRef.current = endedAt;

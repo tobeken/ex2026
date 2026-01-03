@@ -1,13 +1,14 @@
 "use server";
 
+import { ConditionId, TaskId } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import prisma from "@/lib/prisma";
 
 const querySchema = z.object({
   participantId: z.string().min(1),
-  taskId: z.string().min(1),
-  conditionId: z.string().min(1),
+  taskId: z.nativeEnum(TaskId),
+  conditionId: z.nativeEnum(ConditionId),
 });
 
 export async function GET(req: Request) {

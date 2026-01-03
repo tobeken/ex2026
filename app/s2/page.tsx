@@ -116,7 +116,6 @@ export default function Session2Page() {
   const fullRecorderRef = useRef<ActiveRecorder | null>(null);
   const fullStartedAtRef = useRef<number | null>(null);
   const [fullRecordingActive, setFullRecordingActive] = useState(false);
-  const [timerStarted, setTimerStarted] = useState(false);
 
   const orderedTasks = useMemo(() => {
     const plan = ASSIGNMENT_PLAN[participantGroup] || ASSIGNMENT_PLAN.G1;

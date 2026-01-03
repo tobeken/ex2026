@@ -795,9 +795,6 @@ export default function Session2Page() {
         onAssistantSpeechStart={(ts) => {
           // no-op for now
         }}
-        onAssistantSpeechDelta={(text, startedAt) => {
-          // partial delta, no-op
-        }}
           onAssistantSpeechEnd={(text, startedAt, endedAt) => {
             lastAssistantEndRef.current = endedAt;
             postTurns([{ role: "assistant", text, startedAt, endedAt }]);

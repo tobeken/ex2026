@@ -618,13 +618,10 @@ export default function Session1Page() {
             onAssistantSpeechStart={(ts) => {
               // no-op
             }}
-          onAssistantSpeechEnd={(text, startedAt, endedAt) => {
-            lastAssistantEndRef.current = endedAt;
-            postTurns([{ role: "assistant", text, startedAt, endedAt }]);
-          }}
-          onCombinedStreamReady={(getter) => {
-            combinedStreamGetterRef.current = getter;
-          }}
+            onAssistantSpeechEnd={(text, startedAt, endedAt) => {
+              lastAssistantEndRef.current = endedAt;
+              postTurns([{ role: "assistant", text, startedAt, endedAt }]);
+            }}
         />
           <div className="flex justify-end">
             <Button

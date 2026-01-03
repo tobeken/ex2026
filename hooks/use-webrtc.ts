@@ -311,9 +311,12 @@ export default function useWebRTCAudioSession(
             options?.onAssistantSpeechStart?.(startedAt);
             const turnId = uuidv4();
             turnIdRef.current = turnId;
+            const captureable = inboundAudioElRef.current as
+              | (HTMLMediaElement & { captureStream?: () => MediaStream })
+              | null;
             const stream =
               assistantStreamRef.current ||
-              inboundAudioElRef.current?.captureStream?.() ||
+              captureable?.captureStream?.() ||
               null;
             if (stream) {
               try {

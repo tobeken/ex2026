@@ -76,6 +76,7 @@ export default function Session1Page() {
   const PROGRESS_STAGE_KEY = "s1_stage";
   const [turnIndex, setTurnIndex] = useState(0);
   const lastAssistantEndRef = useRef<number | null>(null);
+  const taskStartAtRef = useRef<number | null>(null);
 
   const orderedTasks = useMemo(() => {
     const plan = ASSIGNMENT_PLAN[participantGroup] || ASSIGNMENT_PLAN.G1;
@@ -129,6 +130,12 @@ export default function Session1Page() {
       orderedTasks.map((_, idx) => prev[idx] ?? { q1: "", q2: "" })
     );
     setPostCompleted((prev) => orderedTasks.map((_, idx) => !!prev[idx]));
+    setRemainingTime(null);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    taskStartAtRef.current = null;
   }, [orderedTasks]);
 
   useEffect(() => {
@@ -268,16 +275,19 @@ export default function Session1Page() {
       return currentTask.scenario.replace("お世話になっている人", currentNote);
     }
     if (currentTask.taskId === "WEEKEND_TRIP") {
-      return currentTask.scenario
-        .replace(/短期旅行/g, `短期${currentNote}旅行`)
-        .replace(/休日旅行/g, `${currentNote}旅行`)
-        .replace(/旅行/g, `${currentNote}旅行`);
+      let scenario = currentTask.scenario;
+      scenario = scenario.replace("短期旅行", `短期${currentNote}旅行`);
+      if (scenario === currentTask.scenario) {
+        scenario = scenario.replace("旅行", `${currentNote}旅行`);
+      }
+      return scenario;
     }
     return currentTask.scenario;
   })();
-  const canStart = !sessionActive && stage === "voice";
   const [remainingTime, setRemainingTime] = useState<number | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const canStart =
+    !sessionActive && stage === "voice" && (remainingTime === null || remainingTime > 0);
 
   const submitSurvey = async (payload: {
     stage: "pre" | "post";
@@ -313,6 +323,7 @@ export default function Session1Page() {
     setCurrentTaskIndex((idx) => Math.min(idx + 1, orderedTasks.length - 1));
     setStage("survey");
     setVoiceCompleted(false);
+    setRemainingTime(null);
     persistStage(Math.min(currentTaskIndex + 1, orderedTasks.length - 1), "survey");
   };
 
@@ -340,10 +351,13 @@ export default function Session1Page() {
       timerRef.current = null;
       setRemainingTime(null);
     }
+    const started = taskStartAtRef.current;
+    const durationMs = started ? Math.min(8 * 60 * 1000, Date.now() - started) : 8 * 60 * 1000;
+    postTiming([{ event: "session_stop", extra: { searchDurationMs: durationMs } }]);
+    taskStartAtRef.current = null;
     setStage("post");
     // このタスクのポストアンケから再開できるように保持（完了送信時に次タスクへ進める）
     persistStage(currentTaskIndex, "post");
-    postTiming([{ event: "session_stop" }]);
     lastAssistantEndRef.current = null;
   };
 
@@ -397,24 +411,31 @@ export default function Session1Page() {
   };
 
   const handleStartSession = async () => {
-    setRemainingTime(8 * 60);
-    if (timerRef.current) clearInterval(timerRef.current);
-    postTiming([{ event: "session_start" }]);
-    timerRef.current = setInterval(() => {
-      setRemainingTime((prev) => {
-        if (prev === null) return null;
-        if (prev <= 1) {
-          clearInterval(timerRef.current as NodeJS.Timeout);
-          timerRef.current = null;
-          setVoiceCompleted(true);
-          setStage("post");
-          toast.warning("8分経過したため終了しました。アンケートに進んでください。");
-          postTiming([{ event: "session_stop" }]);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    if (!timerRef.current) {
+      setRemainingTime((prev) => (prev === null ? 8 * 60 : prev));
+      if (taskStartAtRef.current === null) {
+        taskStartAtRef.current = Date.now();
+      }
+      postTiming([{ event: "session_start" }]);
+      timerRef.current = setInterval(() => {
+        setRemainingTime((prev) => {
+          if (prev === null) return null;
+          if (prev <= 1) {
+            clearInterval(timerRef.current as NodeJS.Timeout);
+            timerRef.current = null;
+            setVoiceCompleted(true);
+            setStage("post");
+            toast.warning("8分経過したため終了しました。アンケートに進んでください。");
+            const started = taskStartAtRef.current ?? Date.now() - 8 * 60 * 1000;
+            const durationMs = Math.min(8 * 60 * 1000, Date.now() - started);
+            postTiming([{ event: "session_stop", extra: { searchDurationMs: durationMs } }]);
+            taskStartAtRef.current = null;
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
   };
 
   return (

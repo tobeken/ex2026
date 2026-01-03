@@ -13,7 +13,7 @@ export async function POST() {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                model: "gpt-realtime-2025-08-28",
+                model: "gpt-realtime-mini-2025-12-15",
                 // model:"gpt-4o-2024-08-06",
                 voice: "alloy",
                 modalities: ["audio", "text"],

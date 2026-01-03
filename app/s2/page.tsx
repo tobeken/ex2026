@@ -109,6 +109,8 @@ export default function Session2Page() {
   const [turnIndex, setTurnIndex] = useState(0);
   const modalSavedAtRef = useRef<number | null>(null);
   const lastAssistantEndRef = useRef<number | null>(null);
+  const [timerStarted, setTimerStarted] = useState(false);
+  const [timerStarted, setTimerStarted] = useState(false);
 
   const orderedTasks = useMemo(() => {
     const plan = ASSIGNMENT_PLAN[participantGroup] || ASSIGNMENT_PLAN.G1;
@@ -347,16 +349,17 @@ export default function Session2Page() {
       return currentTask.scenario.replace("お世話になっている人", currentNote);
     }
     if (currentTask.taskId === "WEEKEND_TRIP") {
-      // 「短期旅行」を「短期<入力>旅行」にするなど、挿入する位置を工夫
-      return currentTask.scenario
-        .replace(/短期旅行/g, `短期${currentNote}旅行`)
-        .replace(/休日旅行/g, `${currentNote}旅行`)
-        .replace(/旅行/g, `${currentNote}旅行`);
+      let scenario = currentTask.scenario;
+      scenario = scenario.replace("短期旅行", `短期${currentNote}旅行`);
+      if (scenario === currentTask.scenario) {
+        scenario = scenario.replace("旅行", `${currentNote}旅行`);
+      }
+      return scenario;
     }
     return currentTask.scenario;
   })();
 
-  const canStart = stage === "voice" && audioFinished && !audioPlaying;
+  const canStart = stage === "voice" && audioFinished && !audioPlaying && !timerStarted;
 
   const tlxDimensions = [
     {
@@ -488,6 +491,8 @@ export default function Session2Page() {
     setAudioPlaying(false);
     setAudioFinished(false);
     setVoiceCompleted(false);
+    setTimerStarted(false);
+    setRemainingTime(null);
     setStage("voice");
     persistStage(currentTaskIndex + 1, "voice");
     if (timerRef.current) {
@@ -500,10 +505,14 @@ export default function Session2Page() {
   const handleTaskComplete = () => {
     if (sessionActive) return;
     setVoiceCompleted(true);
+    setTimerStarted(false);
     setStage("post");
     // このタスクのポストアンケから再開できるように保持（完了送信時に次タスクへ進める）
     persistStage(currentTaskIndex, "post");
-    postTiming([{ event: "session_stop" }]);
+    const started = taskStartAtRef.current;
+    const durationMs = started ? Math.min(8 * 60 * 1000, Date.now() - started) : 8 * 60 * 1000;
+    postTiming([{ event: "session_stop", extra: { searchDurationMs: durationMs } }]);
+    taskStartAtRef.current = null;
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
@@ -588,30 +597,40 @@ export default function Session2Page() {
   };
 
   const handleStartSession = () => {
-    setRemainingTime(8 * 60);
-    if (timerRef.current) clearInterval(timerRef.current);
-    const now = Date.now();
-    const extra: any = {};
-    if (modalSavedAtRef.current) {
-      extra.playAudioToStartMs = now - modalSavedAtRef.current;
+    if (!timerRef.current) {
+      setTimerStarted(true);
+      setRemainingTime((prev) => (prev === null ? 8 * 60 : prev));
+      if (timerRef.current) clearInterval(timerRef.current);
+      const now = Date.now();
+      const extra: any = {};
+      if (modalSavedAtRef.current) {
+        extra.playAudioToStartMs = now - modalSavedAtRef.current;
+      }
+      if (taskStartAtRef.current === null) {
+        taskStartAtRef.current = now;
+        postTiming([{ event: "session_start", timestamp: now, extra }]);
+      }
+      timerRef.current = setInterval(() => {
+        setRemainingTime((prev) => {
+          if (prev === null) return null;
+          if (prev <= 1) {
+            clearInterval(timerRef.current as NodeJS.Timeout);
+            timerRef.current = null;
+            setRemainingTime(0);
+            setVoiceCompleted(true);
+            setTimerStarted(false);
+            setStage("post");
+            toast.warning("8分経過しました。アンケートに進んでください。");
+            const started = taskStartAtRef.current ?? Date.now() - 8 * 60 * 1000;
+            const durationMs = Math.min(8 * 60 * 1000, Date.now() - started);
+            postTiming([{ event: "session_stop", extra: { searchDurationMs: durationMs } }]);
+            taskStartAtRef.current = null;
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
     }
-    postTiming([{ event: "session_start", timestamp: now, extra }]);
-    timerRef.current = setInterval(() => {
-      setRemainingTime((prev) => {
-        if (prev === null) return null;
-        if (prev <= 1) {
-          clearInterval(timerRef.current as NodeJS.Timeout);
-          timerRef.current = null;
-          setRemainingTime(0);
-          setVoiceCompleted(true);
-          setStage("post");
-          toast.warning("8分経過しました。アンケートに進んでください。");
-          postTiming([{ event: "session_stop" }]);
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
   };
 
   if (!canAccess) {

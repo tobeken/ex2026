@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect } from "react";
 import { v4 as uuidv4 } from "uuid";
 import { Conversation } from "@/lib/conversations";
+import { startRecorder, stopRecorder, type ActiveRecorder } from "@/lib/recorder";
 import { useTranslations } from "@/components/translations-context";
 
 export interface Tool {
@@ -28,6 +29,7 @@ interface UseWebRTCAudioSessionReturn {
   isMicActive: boolean;
   conversation: Conversation[];
   sendTextMessage: (text: string) => void;
+  getCombinedStream: () => MediaStream | null;
 }
 
 /**
@@ -39,10 +41,22 @@ export default function useWebRTCAudioSession(
   options?: {
     onUserSpeechStart?: (ts: number) => void;
     onUserSpeechEnd?: (ts: number) => void;
-    onUserSpeechFinal?: (text: string, startedAt: number, endedAt: number) => void;
+    onUserSpeechFinal?: (
+      text: string,
+      startedAt: number,
+      endedAt: number,
+      turnId?: string,
+      audioBlob?: Blob,
+    ) => void;
     onAssistantSpeechDelta?: (text: string, startedAt: number) => void;
     onAssistantSpeechStart?: (ts: number) => void;
-    onAssistantSpeechEnd?: (text: string, startedAt: number, endedAt: number) => void;
+    onAssistantSpeechEnd?: (
+      text: string,
+      startedAt: number,
+      endedAt: number,
+      turnId?: string,
+      audioBlob?: Blob,
+    ) => void;
   }
 ): UseWebRTCAudioSessionReturn {
   const { t, locale } = useTranslations();
@@ -78,6 +92,15 @@ export default function useWebRTCAudioSession(
   const userSpeechStartRef = useRef<number | null>(null);
   const assistantSpeechStartRef = useRef<number | null>(null);
   const assistantTextRef = useRef<string>("");
+  const inboundAudioElRef = useRef<HTMLAudioElement | null>(null);
+  const assistantStreamRef = useRef<MediaStream | null>(null);
+  const turnIdRef = useRef<string | null>(null);
+  const userRecorderRef = useRef<ActiveRecorder | null>(null);
+  const assistantRecorderRef = useRef<ActiveRecorder | null>(null);
+  const mixAudioContextRef = useRef<AudioContext | null>(null);
+  const mixDestinationRef = useRef<MediaStreamAudioDestinationNode | null>(null);
+  const mixMicSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const mixAssistantSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
 
   /**
    * We track only the ephemeral user message **ID** here.
@@ -194,6 +217,15 @@ export default function useWebRTCAudioSession(
           const ts = Date.now();
           userSpeechStartRef.current = ts;
           options?.onUserSpeechStart?.(ts);
+          const turnId = uuidv4();
+          turnIdRef.current = turnId;
+          if (audioStreamRef.current) {
+            try {
+              userRecorderRef.current = startRecorder(audioStreamRef.current);
+            } catch (e) {
+              console.warn("failed to start user recorder", e);
+            }
+          }
           getOrCreateEphemeralUserId();
           updateEphemeralUserMessage({ status: "speaking" });
           break;
@@ -236,15 +268,32 @@ export default function useWebRTCAudioSession(
         }
 
         /**
-         * Final user transcription
-         */
-        case "conversation.item.input_audio_transcription.completed": {
-          const endedAt = Date.now();
-          const startedAt = userSpeechStartRef.current ?? endedAt;
-          options?.onUserSpeechFinal?.(msg.transcript || "", startedAt, endedAt);
+        * Final user transcription
+        */
+       case "conversation.item.input_audio_transcription.completed": {
+         const endedAt = Date.now();
+         const startedAt = userSpeechStartRef.current ?? endedAt;
+          let audioBlob: Blob | null = null;
+          if (userRecorderRef.current) {
+            try {
+              audioBlob = await stopRecorder(userRecorderRef.current);
+            } catch (e) {
+              console.warn("failed to stop user recorder", e);
+            }
+            userRecorderRef.current = null;
+          }
+          const finalText = msg.transcript || "";
+          options?.onUserSpeechFinal?.(
+            finalText,
+            startedAt,
+            endedAt,
+            turnIdRef.current ?? undefined,
+            audioBlob ?? undefined,
+          );
           userSpeechStartRef.current = null;
+          turnIdRef.current = null;
           updateEphemeralUserMessage({
-            text: msg.transcript || "",
+            text: finalText,
             isFinal: true,
             status: "final",
           });
@@ -260,6 +309,19 @@ export default function useWebRTCAudioSession(
           if (!assistantSpeechStartRef.current) {
             assistantSpeechStartRef.current = startedAt;
             options?.onAssistantSpeechStart?.(startedAt);
+            const turnId = uuidv4();
+            turnIdRef.current = turnId;
+            const stream =
+              assistantStreamRef.current ||
+              inboundAudioElRef.current?.captureStream?.() ||
+              null;
+            if (stream) {
+              try {
+                assistantRecorderRef.current = startRecorder(stream);
+              } catch (e) {
+                console.warn("failed to start assistant recorder", e);
+              }
+            }
           }
           assistantTextRef.current = (assistantTextRef.current || "") + (msg.delta || "");
           const newMessage: Conversation = {
@@ -296,9 +358,25 @@ export default function useWebRTCAudioSession(
           const endedAt = Date.now();
           const text = assistantTextRef.current || "";
           const startedAt = assistantSpeechStartRef.current ?? endedAt;
-          options?.onAssistantSpeechEnd?.(text, startedAt, endedAt);
+          let audioBlob: Blob | null = null;
+          if (assistantRecorderRef.current) {
+            try {
+              audioBlob = await stopRecorder(assistantRecorderRef.current);
+            } catch (e) {
+              console.warn("failed to stop assistant recorder", e);
+            }
+            assistantRecorderRef.current = null;
+          }
+          options?.onAssistantSpeechEnd?.(
+            text,
+            startedAt,
+            endedAt,
+            turnIdRef.current ?? undefined,
+            audioBlob ?? undefined,
+          );
           assistantSpeechStartRef.current = null;
           assistantTextRef.current = "";
+          turnIdRef.current = null;
           setConversation((prev) => {
             if (prev.length === 0) return prev;
             const updated = [...prev];
@@ -440,10 +518,24 @@ export default function useWebRTCAudioSession(
       // Hidden <audio> element for inbound assistant TTS
       const audioEl = document.createElement("audio");
       audioEl.autoplay = true;
+      inboundAudioElRef.current = audioEl;
 
       // Inbound track => assistant's TTS
       pc.ontrack = (event) => {
         audioEl.srcObject = event.streams[0];
+        assistantStreamRef.current = event.streams[0];
+        assistantSpeechStartRef.current = null;
+        assistantTextRef.current = "";
+        // connect assistant stream to mix graph if exists
+        if (mixAudioContextRef.current && mixDestinationRef.current && !mixAssistantSourceRef.current) {
+          try {
+            const src = mixAudioContextRef.current.createMediaStreamSource(event.streams[0]);
+            src.connect(mixDestinationRef.current);
+            mixAssistantSourceRef.current = src;
+          } catch (e) {
+            console.warn("failed to add assistant to mix", e);
+          }
+        }
 
         // Optional: measure inbound volume
         const audioCtx = new (window.AudioContext || window.AudioContext)();
@@ -471,6 +563,18 @@ export default function useWebRTCAudioSession(
 
       // Add local (mic) track
       pc.addTrack(stream.getTracks()[0]);
+      // build mix graph (mic -> destination). assistant will be added on ontrack
+      try {
+        const mixCtx = new (window.AudioContext || window.AudioContext)();
+        mixAudioContextRef.current = mixCtx;
+        const dest = mixCtx.createMediaStreamDestination();
+        mixDestinationRef.current = dest;
+        const micSrc = mixCtx.createMediaStreamSource(stream);
+        micSrc.connect(dest);
+        mixMicSourceRef.current = micSrc;
+      } catch (e) {
+        console.warn("failed to build mix graph", e);
+      }
 
       // Create offer & set local description
       const offer = await pc.createOffer();
@@ -505,6 +609,33 @@ export default function useWebRTCAudioSession(
    * Stop the session & cleanup
    */
   function stopSession() {
+    if (userRecorderRef.current) {
+      try {
+        userRecorderRef.current.recorder.stop();
+      } catch (e) {
+        console.warn("stop user recorder failed", e);
+      }
+      userRecorderRef.current = null;
+    }
+    if (assistantRecorderRef.current) {
+      try {
+        assistantRecorderRef.current.recorder.stop();
+      } catch (e) {
+        console.warn("stop assistant recorder failed", e);
+      }
+      assistantRecorderRef.current = null;
+    }
+    if (mixAudioContextRef.current) {
+      try {
+        mixAudioContextRef.current.close();
+      } catch (e) {
+        console.warn("mix audio context close failed", e);
+      }
+      mixAudioContextRef.current = null;
+      mixDestinationRef.current = null;
+      mixMicSourceRef.current = null;
+      mixAssistantSourceRef.current = null;
+    }
     if (dataChannelRef.current) {
       dataChannelRef.current.close();
       dataChannelRef.current = null;
@@ -593,7 +724,19 @@ export default function useWebRTCAudioSession(
     };
     
     dataChannelRef.current.send(JSON.stringify(message));
-    dataChannelRef.current.send(JSON.stringify(response));}
+    dataChannelRef.current.send(JSON.stringify(response));
+  }
+
+  /**
+   * Provide a combined stream of mic + assistant audio (if available)
+   */
+  function getCombinedStream(): MediaStream | null {
+    if (mixDestinationRef.current) {
+      const stream = mixDestinationRef.current.stream;
+      return stream;
+    }
+    return null;
+  }
 
   // Cleanup on unmount
   useEffect(() => {
@@ -614,5 +757,6 @@ export default function useWebRTCAudioSession(
     isMicActive,
     conversation,
     sendTextMessage,
+    getCombinedStream,
   };
 }

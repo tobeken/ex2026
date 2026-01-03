@@ -24,6 +24,13 @@ export async function POST(req: Request) {
     const json = await req.json();
     const body = createSchema.parse(json);
 
+    // participant が存在しない場合はデフォルトグループで作成しておく
+    await prisma.participant.upsert({
+      where: { id: body.participantId },
+      update: {},
+      create: { id: body.participantId, group: "G1" },
+    });
+
     const created = await prisma.surveyResponse.create({
       data: {
         participantId: body.participantId,

@@ -3,9 +3,118 @@ generator client {
 }
 
 datasource db {
-  provider = "postgresql"
-  url       = env("DATABASE_URL")   // pooler (for client)
-  directUrl = env("DIRECT_URL")     // primary (for migrations)
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model Participant {
+  /// 被験者ID（p001 など）
+  id                    String                @id
+  group                 LatinGroup
+  createdAt             DateTime              @default(now())
+  assignments           Assignment[]
+  conversationSummaries ConversationSummary[]
+  conversationTimings   ConversationTiming[]
+  conversationTurns     ConversationTurn[]
+  playbackAssets        PlaybackAsset[]
+  surveyResponses       SurveyResponse[]
+}
+
+model Assignment {
+  id            String      @id @default(cuid())
+  participantId String
+  orderIndex    Int
+  taskId        TaskId
+  conditionId   ConditionId
+  createdAt     DateTime    @default(now())
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([participantId, orderIndex])
+  @@unique([participantId, taskId])
+  @@unique([participantId, conditionId])
+  @@index([participantId])
+}
+
+model PlaybackAsset {
+  id              String      @id @default(cuid())
+  participantId   String
+  taskId          TaskId
+  conditionId     ConditionId
+  audioUrl        String
+  durationMs      Int?
+  sourceSessionId String?
+  generatedAt     DateTime    @default(now())
+  participant     Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([participantId, taskId, conditionId])
+  @@index([participantId])
+}
+
+model SurveyResponse {
+  id            String      @id @default(cuid())
+  participantId String
+  session       String
+  taskId        String?
+  stage         String
+  condition     String?
+  answers       Json
+  createdAt     DateTime    @default(now())
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@index([participantId])
+  @@index([session])
+  @@index([taskId])
+}
+
+model ConversationTurn {
+  id            String      @id @default(cuid())
+  participantId String
+  session       String
+  taskId        String
+  turnIndex     Int
+  role          String
+  text          String?
+  startedAt     DateTime
+  endedAt       DateTime
+  durationMs    Int?
+  createdAt     DateTime    @default(now())
+  audioUrl      String?
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@index([participantId])
+  @@index([session, taskId])
+  @@index([participantId, session, taskId, turnIndex])
+}
+
+model ConversationTiming {
+  id            String      @id @default(cuid())
+  participantId String
+  session       String
+  taskId        String
+  event         String
+  timestamp     DateTime
+  extra         Json?
+  createdAt     DateTime    @default(now())
+  participant   Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@index([participantId])
+  @@index([session, taskId])
+}
+
+model ConversationSummary {
+  id                 String      @id @default(cuid())
+  participantId      String
+  session            String
+  taskId             String
+  userUtteranceCount Int         @default(0)
+  createdAt          DateTime    @default(now())
+  updatedAt          DateTime    @updatedAt
+  participant        Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([participantId, session, taskId])
+  @@index([participantId])
+  @@index([session, taskId])
 }
 
 enum TaskId {
@@ -24,123 +133,4 @@ enum LatinGroup {
   G1
   G2
   G3
-}
-
-model Participant {
-  /// 被験者ID（p001 など）
-  id        String     @id
-  group     LatinGroup
-  createdAt DateTime   @default(now())
-
-  assignments    Assignment[]
-  playbackAssets PlaybackAsset[]
-  surveyResponses SurveyResponse[]
-  conversationTurns ConversationTurn[]
-  conversationTimings ConversationTiming[]
-  conversationSummaries ConversationSummary[]
-}
-
-model Assignment {
-  id            String      @id @default(cuid())
-  participantId String
-  orderIndex    Int         // 1,2,3（Session2での実施順）
-  taskId        TaskId
-  conditionId   ConditionId
-  createdAt     DateTime    @default(now())
-
-  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
-
-  /// 同一参加者で順番が被らない
-  @@unique([participantId, orderIndex])
-  /// 同一参加者で同じタスクは1回だけ
-  @@unique([participantId, taskId])
-  /// 同一参加者で同じ条件は1回だけ
-  @@unique([participantId, conditionId])
-  @@index([participantId])
-}
-
-model PlaybackAsset {
-  id              String      @id @default(cuid())
-  participantId   String
-  taskId          TaskId
-  conditionId     ConditionId
-  audioUrl        String
-  durationMs      Int?
-  sourceSessionId String?
-  generatedAt     DateTime    @default(now())
-
-  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
-
-  /// participant × task × condition で1本
-  @@unique([participantId, taskId, conditionId])
-  @@index([participantId])
-}
-
-model SurveyResponse {
-  id             String   @id @default(cuid())
-  participantId  String
-  session        String   // "practice" | "s1" | "s2"
-  taskId         String?  // TaskId 文字列表現を保存（null可）
-  stage          String   // "pre" | "post" | "followup" など
-  condition      String?  // SUMMARY / NARRATIVE / NONE / PRACTICE など
-  answers        Json     // アンケート回答本体（柔軟に保持）
-  createdAt      DateTime @default(now())
-
-  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
-
-  @@index([participantId])
-  @@index([session])
-  @@index([taskId])
-}
-
-model ConversationTurn {
-  id            String   @id @default(cuid())
-  participantId String
-  session       String   // "s1" | "s2"
-  taskId        String
-  turnIndex     Int
-  role          String   // "user" | "assistant"
-  text          String?
-  startedAt     DateTime
-  endedAt       DateTime
-  durationMs    Int?
-  createdAt     DateTime @default(now())
-
-  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
-
-  @@index([participantId])
-  @@index([session, taskId])
-  @@index([participantId, session, taskId, turnIndex])
-}
-
-model ConversationTiming {
-  id            String   @id @default(cuid())
-  participantId String
-  session       String   // "s1" | "s2"
-  taskId        String
-  event         String   // e.g., session_start, session_stop, user_start_talking, etc.
-  timestamp     DateTime
-  extra         Json?
-  createdAt     DateTime @default(now())
-
-  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
-
-  @@index([participantId])
-  @@index([session, taskId])
-}
-
-model ConversationSummary {
-  id                 String   @id @default(cuid())
-  participantId      String
-  session            String
-  taskId             String
-  userUtteranceCount Int      @default(0)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-
-  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
-
-  @@unique([participantId, session, taskId])
-  @@index([participantId])
-  @@index([session, taskId])
 }

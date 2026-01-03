@@ -12,11 +12,12 @@ type VoicePanelProps = {
   onSessionStateChange?: (active: boolean) => void;
   onStart?: () => void;
   onStop?: () => void;
-  onUserSpeechFinal?: (text: string, startedAt: number, endedAt: number) => void;
+  onUserSpeechFinal?: (text: string, startedAt: number, endedAt: number, turnId?: string, audioBlob?: Blob) => void;
   onUserSpeechStart?: (ts: number) => void;
   onUserSpeechEnd?: (ts: number) => void;
   onAssistantSpeechStart?: (ts: number) => void;
-  onAssistantSpeechEnd?: (text: string, startedAt: number, endedAt: number) => void;
+  onAssistantSpeechEnd?: (text: string, startedAt: number, endedAt: number, turnId?: string, audioBlob?: Blob) => void;
+  onCombinedStreamReady?: (getter: () => MediaStream | null) => void;
 };
 
 export function VoicePanel({
@@ -31,6 +32,7 @@ export function VoicePanel({
   onUserSpeechEnd,
   onAssistantSpeechStart,
   onAssistantSpeechEnd,
+  onCombinedStreamReady,
 }: VoicePanelProps) {
   const {
     status,
@@ -39,6 +41,7 @@ export function VoicePanel({
     stopSession,
     currentVolume,
     isMicActive,
+    getCombinedStream,
   } = useWebRTCAudioSession(voice, undefined, {
     onUserSpeechFinal,
     onUserSpeechStart,
@@ -50,6 +53,12 @@ export function VoicePanel({
   useEffect(() => {
     onSessionStateChange?.(isSessionActive);
   }, [isSessionActive, onSessionStateChange]);
+
+  useEffect(() => {
+    if (onCombinedStreamReady) {
+      onCombinedStreamReady(getCombinedStream);
+    }
+  }, [getCombinedStream, onCombinedStreamReady]);
 
   const handleStart = async () => {
     if (!canStart || isSessionActive) return;

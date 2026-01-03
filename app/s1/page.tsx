@@ -10,6 +10,8 @@ import TaskSurvey from "@/components/task-survey";
 import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { useRouter } from "next/navigation";
+import { uploadAudio } from "@/lib/upload-audio";
+import { startRecorder, stopRecorder, type ActiveRecorder } from "@/lib/recorder";
 
 type TaskId = "BIRTHDAY_GIFT" | "FAREWELL_PARTY" | "WEEKEND_TRIP";
 type GroupId = "G1" | "G2" | "G3";
@@ -77,6 +79,10 @@ export default function Session1Page() {
   const [turnIndex, setTurnIndex] = useState(0);
   const lastAssistantEndRef = useRef<number | null>(null);
   const taskStartAtRef = useRef<number | null>(null);
+  const combinedStreamGetterRef = useRef<() => MediaStream | null>(() => null);
+  const fullRecorderRef = useRef<ActiveRecorder | null>(null);
+  const fullStartedAtRef = useRef<number | null>(null);
+  const [fullRecordingActive, setFullRecordingActive] = useState(false);
 
   const orderedTasks = useMemo(() => {
     const plan = ASSIGNMENT_PLAN[participantGroup] || ASSIGNMENT_PLAN.G1;
@@ -137,6 +143,13 @@ export default function Session1Page() {
     }
     taskStartAtRef.current = null;
   }, [orderedTasks]);
+
+  // セッションが Active になったら合成ストリームでフル録音開始
+  useEffect(() => {
+    if (sessionActive) {
+      startFullRecording();
+    }
+  }, [sessionActive]);
 
   useEffect(() => {
     const applyProgress = async () => {
@@ -215,7 +228,7 @@ export default function Session1Page() {
     }
   };
 
-  const postTurns = async (turns: { role: "user" | "assistant"; text?: string; startedAt: number; endedAt: number }[]) => {
+  const postTurns = async (turns: { role: "user" | "assistant"; text?: string; startedAt: number; endedAt: number; audioUrl?: string }[]) => {
     if (!participantId || !currentTask) return;
     try {
       await fetch("/api/conversation/turns", {
@@ -325,6 +338,7 @@ export default function Session1Page() {
     setVoiceCompleted(false);
     setRemainingTime(null);
     persistStage(Math.min(currentTaskIndex + 1, orderedTasks.length - 1), "survey");
+    stopFullRecordingAndUpload();
   };
 
   const handleSurveySubmit = (answers: Record<string, string>) => {
@@ -343,6 +357,65 @@ export default function Session1Page() {
     persistStage(currentTaskIndex, "voice");
   };
 
+  const startFullRecording = () => {
+    if (fullRecorderRef.current) return;
+    const stream = combinedStreamGetterRef.current?.();
+    if (!stream) {
+      console.warn("full recording start skipped: no combined stream");
+      return;
+    }
+    try {
+      fullRecorderRef.current = startRecorder(stream);
+      fullStartedAtRef.current = Date.now();
+      setFullRecordingActive(true);
+    } catch (e) {
+      console.warn("full recording start failed", e);
+    }
+  };
+
+  const stopFullRecordingAndUpload = async () => {
+    if (!fullRecorderRef.current) return;
+    const startedAt = fullStartedAtRef.current ?? Date.now();
+    const endedAt = Date.now();
+    let blob: Blob | null = null;
+    try {
+      blob = await stopRecorder(fullRecorderRef.current);
+    } catch (e) {
+      console.warn("full recording stop failed", e);
+    }
+    fullRecorderRef.current = null;
+    fullStartedAtRef.current = null;
+    setFullRecordingActive(false);
+    if (!blob) return;
+    if (blob.size === 0) {
+      console.warn("full recording blob size 0, skip upload");
+      return;
+    }
+    let audioUrl: string | undefined = undefined;
+    try {
+      audioUrl =
+        (await uploadAudio({
+          participantId,
+          taskId: currentTask.taskId,
+          session: "s1",
+          turnId: `full-${Date.now()}`,
+          role: "user",
+          file: blob,
+        })) || undefined;
+    } catch (e) {
+      console.warn("full recording upload failed", e);
+    }
+    postTurns([
+      {
+        role: "user",
+        text: "(full session audio)",
+        startedAt,
+        endedAt,
+        audioUrl,
+      },
+    ]);
+  };
+
   const handleTaskComplete = () => {
     if (sessionActive) return;
     setVoiceCompleted(true);
@@ -355,6 +428,7 @@ export default function Session1Page() {
     const durationMs = started ? Math.min(8 * 60 * 1000, Date.now() - started) : 8 * 60 * 1000;
     postTiming([{ event: "session_stop", extra: { searchDurationMs: durationMs } }]);
     taskStartAtRef.current = null;
+    stopFullRecordingAndUpload();
     setStage("post");
     // このタスクのポストアンケから再開できるように保持（完了送信時に次タスクへ進める）
     persistStage(currentTaskIndex, "post");
@@ -430,6 +504,7 @@ export default function Session1Page() {
             const durationMs = Math.min(8 * 60 * 1000, Date.now() - started);
             postTiming([{ event: "session_stop", extra: { searchDurationMs: durationMs } }]);
             taskStartAtRef.current = null;
+            stopFullRecordingAndUpload();
             return 0;
           }
           return prev - 1;
@@ -515,13 +590,17 @@ export default function Session1Page() {
       {stage === "voice" && (
         <div className="space-y-4">
           <VoicePanel
-            canStart={canStart}
-            title={`VoicePanel - ${currentTask.title}`}
-            onSessionStateChange={setSessionActive}
-            onStart={handleStartSession}
-            onStop={() => {
-              postTiming([{ event: "session_stop" }]);
-            }}
+          canStart={canStart}
+          title={`VoicePanel - ${currentTask.title}`}
+          onSessionStateChange={setSessionActive}
+          onStart={handleStartSession}
+          onStop={() => {
+            postTiming([{ event: "session_stop" }]);
+            stopFullRecordingAndUpload();
+          }}
+          onCombinedStreamReady={(getter) => {
+            combinedStreamGetterRef.current = getter;
+          }}
             onUserSpeechStart={(ts) => {
               if (lastAssistantEndRef.current) {
                 postTiming([
@@ -539,11 +618,14 @@ export default function Session1Page() {
             onAssistantSpeechStart={(ts) => {
               // no-op
             }}
-            onAssistantSpeechEnd={(text, startedAt, endedAt) => {
-              lastAssistantEndRef.current = endedAt;
-              postTurns([{ role: "assistant", text, startedAt, endedAt }]);
-            }}
-          />
+          onAssistantSpeechEnd={(text, startedAt, endedAt) => {
+            lastAssistantEndRef.current = endedAt;
+            postTurns([{ role: "assistant", text, startedAt, endedAt }]);
+          }}
+          onCombinedStreamReady={(getter) => {
+            combinedStreamGetterRef.current = getter;
+          }}
+        />
           <div className="flex justify-end">
             <Button
               onClick={handleTaskComplete}

@@ -9,7 +9,7 @@ export const jp = {
         about: "これは、現代のNext 15プロジェクトでOpenAIリアルタイムAPIとWebRTCを使用する方法をデモするプロジェクトです。shadcn/uiコンポーネントがインストールされ、WebRTCオーディオセッションフックが実装されています。プロジェクトをクローンして、自分のツールを定義してください。",
         banner: "🎉 新しいNext.js OpenAIリアルタイムブロックUIライブラリをチェックしてください！",
         bannerLink: "もっと詳しく →",
-        beta: "デモ版",
+        beta: "ベータ版",
         dark: "ダーク",
         github: "GitHubでスターをつける",
         language: "言語",

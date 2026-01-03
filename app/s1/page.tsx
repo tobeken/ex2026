@@ -74,6 +74,9 @@ export default function Session1Page() {
   const router = useRouter();
   const PROGRESS_IDX_KEY = "s1_currentTaskIndex";
   const PROGRESS_STAGE_KEY = "s1_stage";
+  const [turnIndex, setTurnIndex] = useState(0);
+  const lastAssistantEndRef = useRef<number | null>(null);
+  const taskStartAtRef = useRef<number | null>(null);
 
   const orderedTasks = useMemo(() => {
     const plan = ASSIGNMENT_PLAN[participantGroup] || ASSIGNMENT_PLAN.G1;
@@ -127,6 +130,12 @@ export default function Session1Page() {
       orderedTasks.map((_, idx) => prev[idx] ?? { q1: "", q2: "" })
     );
     setPostCompleted((prev) => orderedTasks.map((_, idx) => !!prev[idx]));
+    setRemainingTime(null);
+    if (timerRef.current) {
+      clearInterval(timerRef.current);
+      timerRef.current = null;
+    }
+    taskStartAtRef.current = null;
   }, [orderedTasks]);
 
   useEffect(() => {
@@ -184,6 +193,53 @@ export default function Session1Page() {
     }
   };
 
+  const postTiming = async (events: { event: string; timestamp?: number; extra?: any }[]) => {
+    if (!participantId || !currentTask) return;
+    try {
+      await fetch("/api/conversation/timing", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          events.map((e) => ({
+            participantId,
+            session: "s1",
+            taskId: currentTask.taskId,
+            event: e.event,
+            timestamp: e.timestamp ? new Date(e.timestamp).toISOString() : new Date().toISOString(),
+            extra: e.extra,
+          }))
+        ),
+      });
+    } catch (err) {
+      console.warn("failed to post timing", err);
+    }
+  };
+
+  const postTurns = async (turns: { role: "user" | "assistant"; text?: string; startedAt: number; endedAt: number }[]) => {
+    if (!participantId || !currentTask) return;
+    try {
+      await fetch("/api/conversation/turns", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(
+          turns.map((t, idx) => ({
+            participantId,
+            session: "s1",
+            taskId: currentTask.taskId,
+            turnIndex: turnIndex + idx,
+            role: t.role,
+            text: t.text,
+            startedAt: new Date(t.startedAt).toISOString(),
+            endedAt: new Date(t.endedAt).toISOString(),
+          }))
+        ),
+      });
+      setTurnIndex((prev) => prev + turns.length);
+    } catch (err) {
+      console.warn("failed to post turns", err);
+    }
+  };
+
   const currentTask = orderedTasks[currentTaskIndex];
   const currentNote = customNotes[currentTaskIndex] || "";
   const notePrompt = (() => {
@@ -219,16 +275,19 @@ export default function Session1Page() {
       return currentTask.scenario.replace("お世話になっている人", currentNote);
     }
     if (currentTask.taskId === "WEEKEND_TRIP") {
-      return currentTask.scenario
-        .replace(/短期旅行/g, `短期${currentNote}旅行`)
-        .replace(/休日旅行/g, `${currentNote}旅行`)
-        .replace(/旅行/g, `${currentNote}旅行`);
+      let scenario = currentTask.scenario;
+      scenario = scenario.replace("短期旅行", `短期${currentNote}旅行`);
+      if (scenario === currentTask.scenario) {
+        scenario = scenario.replace("旅行", `${currentNote}旅行`);
+      }
+      return scenario;
     }
     return currentTask.scenario;
   })();
-  const canStart = !sessionActive && stage === "voice";
   const [remainingTime, setRemainingTime] = useState<number | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
+  const canStart =
+    !sessionActive && stage === "voice" && (remainingTime === null || remainingTime > 0);
 
   const submitSurvey = async (payload: {
     stage: "pre" | "post";
@@ -264,6 +323,7 @@ export default function Session1Page() {
     setCurrentTaskIndex((idx) => Math.min(idx + 1, orderedTasks.length - 1));
     setStage("survey");
     setVoiceCompleted(false);
+    setRemainingTime(null);
     persistStage(Math.min(currentTaskIndex + 1, orderedTasks.length - 1), "survey");
   };
 
@@ -291,9 +351,14 @@ export default function Session1Page() {
       timerRef.current = null;
       setRemainingTime(null);
     }
+    const started = taskStartAtRef.current;
+    const durationMs = started ? Math.min(8 * 60 * 1000, Date.now() - started) : 8 * 60 * 1000;
+    postTiming([{ event: "session_stop", extra: { searchDurationMs: durationMs } }]);
+    taskStartAtRef.current = null;
     setStage("post");
     // このタスクのポストアンケから再開できるように保持（完了送信時に次タスクへ進める）
     persistStage(currentTaskIndex, "post");
+    lastAssistantEndRef.current = null;
   };
 
   const handleSaveNote = () => {
@@ -346,22 +411,31 @@ export default function Session1Page() {
   };
 
   const handleStartSession = async () => {
-    setRemainingTime(8 * 60);
-    if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = setInterval(() => {
-      setRemainingTime((prev) => {
-        if (prev === null) return null;
-        if (prev <= 1) {
-          clearInterval(timerRef.current as NodeJS.Timeout);
-          timerRef.current = null;
-          setVoiceCompleted(true);
-          setStage("post");
-          toast.warning("8分経過したため終了しました。アンケートに進んでください。");
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
+    if (!timerRef.current) {
+      setRemainingTime((prev) => (prev === null ? 8 * 60 : prev));
+      if (taskStartAtRef.current === null) {
+        taskStartAtRef.current = Date.now();
+      }
+      postTiming([{ event: "session_start" }]);
+      timerRef.current = setInterval(() => {
+        setRemainingTime((prev) => {
+          if (prev === null) return null;
+          if (prev <= 1) {
+            clearInterval(timerRef.current as NodeJS.Timeout);
+            timerRef.current = null;
+            setVoiceCompleted(true);
+            setStage("post");
+            toast.warning("8分経過したため終了しました。アンケートに進んでください。");
+            const started = taskStartAtRef.current ?? Date.now() - 8 * 60 * 1000;
+            const durationMs = Math.min(8 * 60 * 1000, Date.now() - started);
+            postTiming([{ event: "session_stop", extra: { searchDurationMs: durationMs } }]);
+            taskStartAtRef.current = null;
+            return 0;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    }
   };
 
   return (
@@ -445,6 +519,30 @@ export default function Session1Page() {
             title={`VoicePanel - ${currentTask.title}`}
             onSessionStateChange={setSessionActive}
             onStart={handleStartSession}
+            onStop={() => {
+              postTiming([{ event: "session_stop" }]);
+            }}
+            onUserSpeechStart={(ts) => {
+              if (lastAssistantEndRef.current) {
+                postTiming([
+                  {
+                    event: "assistant_end_to_user_start",
+                    timestamp: ts,
+                    extra: { delayMs: ts - lastAssistantEndRef.current },
+                  },
+                ]);
+              }
+            }}
+            onUserSpeechFinal={(text, startedAt, endedAt) => {
+              postTurns([{ role: "user", text, startedAt, endedAt }]);
+            }}
+            onAssistantSpeechStart={(ts) => {
+              // no-op
+            }}
+            onAssistantSpeechEnd={(text, startedAt, endedAt) => {
+              lastAssistantEndRef.current = endedAt;
+              postTurns([{ role: "assistant", text, startedAt, endedAt }]);
+            }}
           />
           <div className="flex justify-end">
             <Button

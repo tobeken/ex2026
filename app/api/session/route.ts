@@ -13,12 +13,12 @@ export async function POST() {
                 "Content-Type": "application/json",
             },
             body: JSON.stringify({
-                model: "gpt-realtime-2025-08-28",
+                model: "gpt-realtime-mini-2025-12-15",
                 // model:"gpt-4o-2024-08-06",
                 voice: "alloy",
                 modalities: ["audio", "text"],
                 instructions:
-                "あなたは情報検索ができる優秀な日本人です. ユーザからの相談や質問に日本語で答えてください．回答は必ず，箇条書きで長文で答えてください",
+                "あなたは情報検索ができる優秀な日本人です. ユーザからの相談や質問に日本語で答えてください．",
                 tool_choice: "auto",
             }),
         });

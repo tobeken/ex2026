@@ -36,6 +36,14 @@ interface UseWebRTCAudioSessionReturn {
 export default function useWebRTCAudioSession(
   voice: string,
   tools?: Tool[],
+  options?: {
+    onUserSpeechStart?: (ts: number) => void;
+    onUserSpeechEnd?: (ts: number) => void;
+    onUserSpeechFinal?: (text: string, startedAt: number, endedAt: number) => void;
+    onAssistantSpeechDelta?: (text: string, startedAt: number) => void;
+    onAssistantSpeechStart?: (ts: number) => void;
+    onAssistantSpeechEnd?: (text: string, startedAt: number, endedAt: number) => void;
+  }
 ): UseWebRTCAudioSessionReturn {
   const { t, locale } = useTranslations();
   // Connection/session states
@@ -67,6 +75,9 @@ export default function useWebRTCAudioSession(
   const volumeIntervalRef = useRef<number | null>(null);
   const [isMicActive, setIsMicActive] = useState(false);
   const micActiveRef = useRef(false);
+  const userSpeechStartRef = useRef<number | null>(null);
+  const assistantSpeechStartRef = useRef<number | null>(null);
+  const assistantTextRef = useRef<string>("");
 
   /**
    * We track only the ephemeral user message **ID** here.
@@ -180,6 +191,9 @@ export default function useWebRTCAudioSession(
          * User speech started
          */
         case "input_audio_buffer.speech_started": {
+          const ts = Date.now();
+          userSpeechStartRef.current = ts;
+          options?.onUserSpeechStart?.(ts);
           getOrCreateEphemeralUserId();
           updateEphemeralUserMessage({ status: "speaking" });
           break;
@@ -189,6 +203,8 @@ export default function useWebRTCAudioSession(
          * User speech stopped
          */
         case "input_audio_buffer.speech_stopped": {
+          const ts = Date.now();
+          options?.onUserSpeechEnd?.(ts);
           // optional: you could set "stopped" or just keep "speaking"
           updateEphemeralUserMessage({ status: "speaking" });
           break;
@@ -223,7 +239,10 @@ export default function useWebRTCAudioSession(
          * Final user transcription
          */
         case "conversation.item.input_audio_transcription.completed": {
-          // console.log("Final user transcription:", msg.transcript);
+          const endedAt = Date.now();
+          const startedAt = userSpeechStartRef.current ?? endedAt;
+          options?.onUserSpeechFinal?.(msg.transcript || "", startedAt, endedAt);
+          userSpeechStartRef.current = null;
           updateEphemeralUserMessage({
             text: msg.transcript || "",
             isFinal: true,
@@ -237,6 +256,12 @@ export default function useWebRTCAudioSession(
          * Streaming AI transcripts (assistant partial)
          */
         case "response.audio_transcript.delta": {
+          const startedAt = assistantSpeechStartRef.current ?? Date.now();
+          if (!assistantSpeechStartRef.current) {
+            assistantSpeechStartRef.current = startedAt;
+            options?.onAssistantSpeechStart?.(startedAt);
+          }
+          assistantTextRef.current = (assistantTextRef.current || "") + (msg.delta || "");
           const newMessage: Conversation = {
             id: uuidv4(), // generate a fresh ID for each assistant partial
             role: "assistant",
@@ -244,6 +269,7 @@ export default function useWebRTCAudioSession(
             timestamp: new Date().toISOString(),
             isFinal: false,
           };
+          options?.onAssistantSpeechDelta?.(msg.delta, startedAt);
 
           setConversation((prev) => {
             const lastMsg = prev[prev.length - 1];
@@ -267,6 +293,12 @@ export default function useWebRTCAudioSession(
          * Mark the last assistant message as final
          */
         case "response.audio_transcript.done": {
+          const endedAt = Date.now();
+          const text = assistantTextRef.current || "";
+          const startedAt = assistantSpeechStartRef.current ?? endedAt;
+          options?.onAssistantSpeechEnd?.(text, startedAt, endedAt);
+          assistantSpeechStartRef.current = null;
+          assistantTextRef.current = "";
           setConversation((prev) => {
             if (prev.length === 0) return prev;
             const updated = [...prev];
@@ -446,7 +478,7 @@ export default function useWebRTCAudioSession(
 
       // Send SDP offer to OpenAI Realtime
       const baseUrl = "https://api.openai.com/v1/realtime";
-      const model = "gpt-4o-realtime-preview-2024-12-17";
+      const model = "gpt-realtime-mini-2025-12-15";
       const response = await fetch(`${baseUrl}?model=${model}&voice=${voice}`, {
         method: "POST",
         body: offer.sdp,

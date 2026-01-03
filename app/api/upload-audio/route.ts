@@ -49,9 +49,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const { data, error: pubErr } = supabase.storage.from(BUCKET).getPublicUrl(path);
-  if (pubErr || !data?.publicUrl) {
-    console.error("getPublicUrl failed", pubErr);
+  const { data } = supabase.storage.from(BUCKET).getPublicUrl(path);
+  if (!data?.publicUrl) {
+    console.error("getPublicUrl failed", data);
     return NextResponse.json({ error: "failed to create public url", path }, { status: 500 });
   }
   return NextResponse.json({ url: data.publicUrl, path });

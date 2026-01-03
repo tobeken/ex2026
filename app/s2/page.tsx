@@ -112,6 +112,7 @@ export default function Session2Page() {
   const modalSavedAtRef = useRef<number | null>(null);
   const lastAssistantEndRef = useRef<number | null>(null);
   const [timerStarted, setTimerStarted] = useState(false);
+  const taskStartAtRef = useRef<number | null>(null);
   const combinedStreamGetterRef = useRef<() => MediaStream | null>(() => null);
   const fullRecorderRef = useRef<ActiveRecorder | null>(null);
   const fullStartedAtRef = useRef<number | null>(null);

@@ -84,7 +84,7 @@ export function VoicePanel({
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <p className="text-sm font-medium">{title}</p>
-          <p className="text-xs text-muted-foreground">Voice: {voice}</p>
+          {/* <p className="text-xs text-muted-foreground">Voice: {voice}</p> */}
         </div>
         <div className="flex gap-2">
           <span

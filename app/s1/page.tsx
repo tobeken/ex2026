@@ -541,10 +541,10 @@ export default function Session1Page() {
               Step {currentTaskIndex + 1} / {orderedTasks.length}
             </p>
             <p className="text-lg font-semibold">{currentTask.title}</p>
-            <div className="text-xs text-muted-foreground flex items-center gap-1">
+            {/* <div className="text-xs text-muted-foreground flex items-center gap-1">
               <span>Condition:</span>
               <Badge variant="outline">{currentTask.condition}</Badge>
-            </div>
+            </div> */}
             <p className="text-sm text-foreground mt-2 leading-6 font-medium">
               {scenarioWithReplacement}
             </p>

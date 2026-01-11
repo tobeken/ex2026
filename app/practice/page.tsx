@@ -166,10 +166,10 @@ export default function PracticePage() {
           <div>
             <p className="text-sm font-medium">Step 1 / 1</p>
             <p className="text-lg font-semibold">{practiceTask.title}</p>
-            <div className="text-xs text-muted-foreground flex items-center gap-1">
+            {/* <div className="text-xs text-muted-foreground flex items-center gap-1">
               <span>Condition:</span>
               <Badge variant="outline">{practiceTask.condition}</Badge>
-            </div>
+            </div> */}
             <p className="text-sm text-foreground mt-2 leading-6 font-medium">
               {scenarioWithReplacement}
             </p>

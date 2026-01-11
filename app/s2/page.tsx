@@ -582,7 +582,7 @@ export default function Session2Page() {
     // このタスクのポストアンケから再開できるように保持（完了送信時に次タスクへ進める）
     persistStage(currentTaskIndex, "post");
     const started = taskStartAtRef.current;
-    const durationMs = started ? Math.min(8 * 60 * 1000, Date.now() - started) : 8 * 60 * 1000;
+    const durationMs = started ? Math.min(5 * 60 * 1000, Date.now() - started) : 5 * 60 * 1000;
     postTiming([{ event: "session_stop", extra: { searchDurationMs: durationMs } }]);
     taskStartAtRef.current = null;
     if (timerRef.current) {
@@ -672,7 +672,7 @@ export default function Session2Page() {
   const handleStartSession = () => {
     if (timerRef.current) return;
     setTimerStarted(true);
-    setRemainingTime((prev) => (prev === null ? 8 * 60 : prev));
+    setRemainingTime((prev) => (prev === null ? 5 * 60 : prev));
     startFullRecording();
     const now = Date.now();
     const extra: any = {};
@@ -693,9 +693,9 @@ export default function Session2Page() {
           setVoiceCompleted(true);
           setTimerStarted(false);
           setStage("post");
-          toast.warning("8分経過しました。アンケートに進んでください。");
-          const started = taskStartAtRef.current ?? Date.now() - 8 * 60 * 1000;
-          const durationMs = Math.min(8 * 60 * 1000, Date.now() - started);
+          toast.warning("5分経過しました。アンケートに進んでください。");
+          const started = taskStartAtRef.current ?? Date.now() - 5 * 60 * 1000;
+          const durationMs = Math.min(5 * 60 * 1000, Date.now() - started);
           postTiming([{ event: "session_stop", extra: { searchDurationMs: durationMs } }]);
           taskStartAtRef.current = null;
           return 0;

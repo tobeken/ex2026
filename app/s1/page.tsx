@@ -425,7 +425,7 @@ export default function Session1Page() {
       setRemainingTime(null);
     }
     const started = taskStartAtRef.current;
-    const durationMs = started ? Math.min(8 * 60 * 1000, Date.now() - started) : 8 * 60 * 1000;
+    const durationMs = started ? Math.min(5 * 60 * 1000, Date.now() - started) : 5 * 60 * 1000;
     postTiming([{ event: "session_stop", extra: { searchDurationMs: durationMs } }]);
     taskStartAtRef.current = null;
     stopFullRecordingAndUpload();
@@ -486,7 +486,7 @@ export default function Session1Page() {
 
   const handleStartSession = async () => {
     if (!timerRef.current) {
-      setRemainingTime((prev) => (prev === null ? 8 * 60 : prev));
+    setRemainingTime((prev) => (prev === null ? 5 * 60 : prev));
       if (taskStartAtRef.current === null) {
         taskStartAtRef.current = Date.now();
       }
@@ -499,9 +499,9 @@ export default function Session1Page() {
             timerRef.current = null;
             setVoiceCompleted(true);
             setStage("post");
-            toast.warning("8分経過したため終了しました。アンケートに進んでください。");
-            const started = taskStartAtRef.current ?? Date.now() - 8 * 60 * 1000;
-            const durationMs = Math.min(8 * 60 * 1000, Date.now() - started);
+            toast.warning("5分経過したため終了しました。アンケートに進んでください。");
+            const started = taskStartAtRef.current ?? Date.now() - 5 * 60 * 1000;
+            const durationMs = Math.min(5 * 60 * 1000, Date.now() - started);
             postTiming([{ event: "session_stop", extra: { searchDurationMs: durationMs } }]);
             taskStartAtRef.current = null;
             stopFullRecordingAndUpload();

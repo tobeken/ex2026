@@ -92,7 +92,7 @@ export default function PracticePage() {
   };
 
   const handleStartSession = () => {
-    setRemainingTime(8 * 60);
+    setRemainingTime(5 * 60);
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
       setRemainingTime((prev) => {
@@ -103,7 +103,7 @@ export default function PracticePage() {
           setRemainingTime(0);
           setVoiceCompleted(true);
           setStage("post");
-          toast.warning("8分経過しました。アンケートに進んでください。");
+          toast.warning("5分経過しました。アンケートに進んでください。");
           return 0;
         }
         return prev - 1;

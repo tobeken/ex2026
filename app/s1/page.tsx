@@ -525,7 +525,7 @@ export default function Session1Page() {
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold">Session 1</h1>
         <p className="text-sm text-muted-foreground">
-          1回目も 3 タスク連続で進めます。Start / Stop のみで進行できます。
+        1回目（3タスク連続）。音声再生 → 対話開始/対話中断 → 完了 の流れです。検索時間は5分です。終了後にアンケートに答えてください。
         </p>
         {participantId && (
           <p className="text-xs text-muted-foreground">
@@ -641,7 +641,7 @@ export default function Session1Page() {
           <p className="text-sm font-medium">タスク終了アンケート</p>
           <div className="space-y-2">
             <p className="text-sm font-semibold">
-              Q1. 今回、調べて分かったこと・理解したことを箇条書きで書いてください
+              Q1. 今回、調べて分かったことや決まったことを箇条書きで書いてください
             </p>
             <Textarea
               value={postAnswers[currentTaskIndex]?.q1 || ""}

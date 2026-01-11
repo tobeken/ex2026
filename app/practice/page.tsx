@@ -157,7 +157,7 @@ export default function PracticePage() {
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold">練習タスク</h1>
         <p className="text-sm text-muted-foreground">
-          Start / Stop で検索を行い、終了後にアンケートに回答してください。
+        音声再生 → 対話開始/対話中断 → 完了 の流れです。検索時間は5分です。終了後にアンケートに答えてください。
         </p>
       </div>
 
@@ -235,7 +235,7 @@ export default function PracticePage() {
           <p className="text-sm font-medium">タスク終了アンケート</p>
           <div className="space-y-2">
             <p className="text-sm font-semibold">
-              Q1. 今回、調べて分かったこと・理解したことを箇条書きで書いてください
+              Q1. 今回、調べて分かったことや決まったことを箇条書きで書いてください
             </p>
             <Textarea
               value={postAnswers.q1}

@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
-import { ThemeSwitcher } from "@/components/theme-switcher";
 import { MobileNav } from "./mobile-nav";
 import { Badge } from "./ui/badge";
 import { Button } from "./ui/button";
@@ -107,7 +106,6 @@ export function Header() {
               </Button>
             </motion.div>
           </Link> */}
-          <ThemeSwitcher />
         </motion.div>
       </div>
     </motion.header>

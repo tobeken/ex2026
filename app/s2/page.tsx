@@ -24,7 +24,8 @@ const createPostAnswer = () => ({
   q1: "",
   q2: 0,
   q3: 0,
-  q4: {
+  q4: "",
+  q5: {
     mental: 0,
     physical: 0,
     temporal: 0,
@@ -32,7 +33,7 @@ const createPostAnswer = () => ({
     effort: 0,
     frustration: 0,
   },
-  q5: {} as Record<string, string>, // pairwise weighting selection
+  q6: {} as Record<string, string>, // pairwise weighting selection
 });
 
 const TASK_CATALOG: Record<
@@ -617,18 +618,21 @@ export default function Session2Page() {
   };
 
   const handlePostAnswerChange = (
-    key: "q1" | "q2" | "q3" | "q4",
+    key: "q1" | "q2" | "q3" | "q4" | "q5",
     value: string,
-    tlxKey?: keyof (typeof postAnswers)[number]["q4"],
+    tlxKey?: keyof (typeof postAnswers)[number]["q5"],
   ) => {
     const next = [...postAnswers];
-    if (key === "q4" && tlxKey) {
+    if (key === "q5" && tlxKey) {
       next[currentTaskIndex] = {
         ...next[currentTaskIndex],
-        q4: { ...next[currentTaskIndex].q4, [tlxKey]: Number(value) },
+        q5: { ...next[currentTaskIndex].q5, [tlxKey]: Number(value) },
       };
     } else {
-      next[currentTaskIndex] = { ...next[currentTaskIndex], [key]: key === "q1" ? value : Number(value) };
+      next[currentTaskIndex] = {
+        ...next[currentTaskIndex],
+        [key]: key === "q1" || key === "q4" ? value : Number(value),
+      };
     }
     setPostAnswers(next);
     const completedNext = [...postCompleted];
@@ -638,15 +642,15 @@ export default function Session2Page() {
 
   const handlePostSubmit = () => {
     const ans = postAnswers[currentTaskIndex];
-    const tlxValues = Object.values(ans.q4);
+    const tlxValues = Object.values(ans.q5);
     const tlxFilled = tlxValues.every((v) => v > 0);
     const pairFilled = tlxPairs.every(
       ([a, b]) =>
-        ans.q5 &&
-        typeof ans.q5[`${a}|${b}`] === "string" &&
-        (ans.q5[`${a}|${b}`] === a || ans.q5[`${a}|${b}`] === b)
+        ans.q6 &&
+        typeof ans.q6[`${a}|${b}`] === "string" &&
+        (ans.q6[`${a}|${b}`] === a || ans.q6[`${a}|${b}`] === b)
     );
-    if (!ans.q1.trim() || ans.q2 <= 0 || ans.q3 <= 0 || !tlxFilled || !pairFilled) {
+    if (!ans.q1.trim() || !ans.q4.trim() || ans.q2 <= 0 || ans.q3 <= 0 || !tlxFilled || !pairFilled) {
       alert("すべての項目に回答してください。");
       return;
     }
@@ -721,7 +725,7 @@ export default function Session2Page() {
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold">Session 2</h1>
         <p className="text-sm text-muted-foreground">
-          2回目（3タスク連続）。音声再生 → 対話開始/対話中断 → 完了 の流れです。検索時間は5分です。
+          2回目（3タスク連続）。音声再生 → 対話開始/対話中断 → 完了 の流れです。検索時間は5分です。終了後にアンケートに答えてください。
         </p>
         {participantId && (
           <p className="text-xs text-muted-foreground">
@@ -820,7 +824,7 @@ export default function Session2Page() {
       {stage === "post" && (
         <Card className="p-4 space-y-4">
           <p className="text-sm font-semibold">
-            Q1. 今回、新たに調べて分かったこと・理解したことを箇条書きで書いてください
+            Q1. 今回の検索で、新たに調べて分かったことや決まったことを箇条書きで書いてください
           </p>
           <Textarea
             value={postAnswers[currentTaskIndex]?.q1 || ""}
@@ -830,7 +834,7 @@ export default function Session2Page() {
           />
           <div className="space-y-2">
             <p className="text-sm font-semibold">
-              Q2. 検索前のシステムの音声が記憶想起に役立ったと思いますか？
+              Q2. 検索前に聞いたシステムの音声は前回調べたことを思い出すのに役立ちましたか？
             </p>
             <div className="flex flex-wrap gap-3 text-sm">
               {[1, 2, 3, 4, 5].map((n) => {
@@ -852,7 +856,7 @@ export default function Session2Page() {
           </div>
           <div className="space-y-2">
             <p className="text-sm font-semibold">
-              Q3. 検索前に提示されたシステムの音声は、検索を再開し、最初の検索を行う際に役立ちましたか？
+              Q3. 検索前に聞いたシステムの音声は、検索を再開し、最初の検索を行う際に役立ちましたか？
             </p>
             <div className="flex flex-wrap gap-3 text-sm">
               {[1, 2, 3, 4, 5].map((n) => {
@@ -872,8 +876,19 @@ export default function Session2Page() {
               })}
             </div>
           </div>
+          <div className="space-y-2">
+            <p className="text-sm font-semibold">
+              Q4. 検索前に聞いたシステムの音声について感じたことを自由に記述してください
+            </p>
+            <Textarea
+              value={postAnswers[currentTaskIndex]?.q4 || ""}
+              onChange={(e) => handlePostAnswerChange("q4", e.target.value)}
+              placeholder="自由記述"
+              className="min-h-[120px]"
+            />
+          </div>
           <div className="space-y-4">
-            <p className="text-sm font-semibold">Q4. 認知負荷 (NASA-TLX)</p>
+            <p className="text-sm font-semibold">Q5. タスクの経験についてお伺いします</p>
             <p className="text-xs text-muted-foreground">
               タスクの経験に最も近い各スケール上のポイントをクリックしてください。
             </p>
@@ -894,7 +909,7 @@ export default function Session2Page() {
                   >
                     {Array.from({ length: 20 }, (_, idx) => {
                       const value = idx + 1;
-                      const current = postAnswers[currentTaskIndex]?.q4?.[dim.key] || 0;
+                      const current = postAnswers[currentTaskIndex]?.q5?.[dim.key] || 0;
                       return (
                         <label
                           key={`${dim.key}-${value}`}
@@ -907,21 +922,21 @@ export default function Session2Page() {
                             name={`tlx-${dim.key}-${currentTaskIndex}`}
                             value={value}
                             checked={current === value}
-                            onChange={(e) => handlePostAnswerChange("q4", e.target.value, dim.key)}
+                            onChange={(e) => handlePostAnswerChange("q5", e.target.value, dim.key)}
                             className="sr-only"
                           />
                         </label>
                       );
                     })}
                   </div>
-                  <p className="text-xs text-muted-foreground">現在の値: {postAnswers[currentTaskIndex]?.q4?.[dim.key] || 0}</p>
+                  <p className="text-xs text-muted-foreground">現在の値: {postAnswers[currentTaskIndex]?.q5?.[dim.key] || 0}</p>
                 </div>
               </div>
             ))}
           </div>
           <div className="space-y-3">
             <p className="text-sm font-semibold">
-              2つの項目を比較し、より負荷に影響すると感じた項目を選んでください
+              Q6. 2つの項目を比較し、より負荷に影響すると感じた項目を選んでください
             </p>
             <p className="text-xs text-muted-foreground">
               各ペアで一方を選択してください。
@@ -929,7 +944,7 @@ export default function Session2Page() {
             <div className="space-y-2">
               {tlxPairs.map(([a, b]) => {
                 const pairKey = `${a}|${b}`;
-                const current = postAnswers[currentTaskIndex]?.q5?.[pairKey] || "";
+                const current = postAnswers[currentTaskIndex]?.q6?.[pairKey] || "";
                 return (
                   <div key={pairKey} className="flex items-center gap-4 text-sm">
                     <label className="flex items-center gap-2">
@@ -943,7 +958,7 @@ export default function Session2Page() {
                           const currentAns = next[currentTaskIndex];
                           next[currentTaskIndex] = {
                             ...currentAns,
-                            q5: { ...currentAns.q5, [pairKey]: e.target.value },
+                            q6: { ...currentAns.q6, [pairKey]: e.target.value },
                           };
                           setPostAnswers(next);
                           const completedNext = [...postCompleted];
@@ -965,7 +980,7 @@ export default function Session2Page() {
                           const currentAns = next[currentTaskIndex];
                           next[currentTaskIndex] = {
                             ...currentAns,
-                            q5: { ...currentAns.q5, [pairKey]: e.target.value },
+                            q6: { ...currentAns.q6, [pairKey]: e.target.value },
                           };
                           setPostAnswers(next);
                           const completedNext = [...postCompleted];
@@ -997,7 +1012,7 @@ export default function Session2Page() {
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-sm font-semibold">
-              前回の検索で調べて分かったこと・理解したことを箇条書きで書いてください
+              前回の検索を思い出して、調べて分かったことや決まったことを箇条書きで書いてください（覚えていない場合は「覚えていない」と記述してください）
             </p>
             <Textarea
               value={followupDraftPrev}
@@ -1008,7 +1023,7 @@ export default function Session2Page() {
           </div>
           <div className="space-y-3 pt-2">
             <p className="text-sm font-semibold">
-              前回の検索を踏まえて、調べ残っていること、次に調べたい点を箇条書きで書いてください
+              前回の検索を思い出して、調べ残っていることや次に調べたいことを箇条書きで書いてください（覚えていない場合は「覚えていない」と記述してください）
             </p>
             <Textarea
               value={followupDraftNext}

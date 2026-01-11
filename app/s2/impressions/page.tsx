@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 import { useRouter } from "next/navigation";
 
 export default function ImpressionsPage() {
@@ -13,7 +12,6 @@ export default function ImpressionsPage() {
   const [q2, setQ2] = useState<string[]>([]);
   const [q3, setQ3] = useState("");
   const [q4, setQ4] = useState<number>(0);
-  const [audioFeelings, setAudioFeelings] = useState({ a1: "", a2: "", a3: "" });
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -27,11 +25,6 @@ export default function ImpressionsPage() {
       alert("参加者IDがありません。ログインからやり直してください。");
       return;
     }
-    if (!audioFeelings.a1.trim() || !audioFeelings.a2.trim() || !audioFeelings.a3.trim()) {
-      alert("各タスクの検索前音声の感想を入力してください。");
-      return;
-    }
-
     try {
       const res = await fetch("/api/surveys", {
         method: "POST",
@@ -47,7 +40,6 @@ export default function ImpressionsPage() {
             q2,
             q3,
             q4,
-            audioFeelings,
           },
         }),
       });
@@ -76,7 +68,7 @@ export default function ImpressionsPage() {
             Q1. 利用したことのある音声対話型検索システムについて教えてください（複数選択可）
           </p>
           <div className="flex flex-col gap-2 text-sm">
-            {["Alexa", "GoogleHome", "Siri", "その他", "利用したことがない"].map((label) => (
+            {["Alexa", "GoogleHome", "Siri", "生成AI（ChatGPT、Geminiなど）の音声対話", "その他", "利用したことがない"].map((label) => (
               <label key={label} className="flex items-center gap-2">
                 <input
                   type="checkbox"
@@ -175,40 +167,6 @@ export default function ImpressionsPage() {
                 </label>
               ))}
           </div>
-        </div>
-
-        <div className="space-y-2 pt-2">
-          <p className="text-sm font-semibold">
-            タスク1の検索前の音声再生について感じたことを自由に記述してください
-          </p>
-          <Textarea
-            value={audioFeelings.a1}
-            onChange={(e) => setAudioFeelings((prev) => ({ ...prev, a1: e.target.value }))}
-            placeholder="自由記述"
-            className="min-h-[80px]"
-          />
-        </div>
-        <div className="space-y-2">
-          <p className="text-sm font-semibold">
-            タスク2の検索前の音声再生について感じたことを自由に記述してください
-          </p>
-          <Textarea
-            value={audioFeelings.a2}
-            onChange={(e) => setAudioFeelings((prev) => ({ ...prev, a2: e.target.value }))}
-            placeholder="自由記述"
-            className="min-h-[80px]"
-          />
-        </div>
-        <div className="space-y-2">
-          <p className="text-sm font-semibold">
-            タスク3の検索前の音声再生について感じたことを自由に記述してください
-          </p>
-          <Textarea
-            value={audioFeelings.a3}
-            onChange={(e) => setAudioFeelings((prev) => ({ ...prev, a3: e.target.value }))}
-            placeholder="自由記述"
-            className="min-h-[80px]"
-          />
         </div>
 
         <div className="flex justify-end">

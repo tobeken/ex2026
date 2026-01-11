@@ -4,7 +4,6 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
 
 const ageOptions = ["10代", "20代", "30代", "40代", "50代", "60代以上", "回答を控える"];
 const occupationOptions = [
@@ -30,7 +29,6 @@ export default function DemographicsPage() {
   const [occupation, setOccupation] = useState<string>(occupationOptions[0]);
   const [education, setEducation] = useState<string>(educationOptions[0]);
   const [gender, setGender] = useState<string>(genderOptions[0]);
-  const [freeText, setFreeText] = useState("");
   const router = useRouter();
 
   const handleSubmit = () => {
@@ -44,16 +42,7 @@ export default function DemographicsPage() {
 
       <Card className="p-4 space-y-4">
         <div className="space-y-2">
-          <p className="text-sm font-semibold">Q1. 自由記述（必要に応じて記入してください）</p>
-          <Textarea
-            value={freeText}
-            onChange={(e) => setFreeText(e.target.value)}
-            placeholder="自由に記載してください"
-          />
-        </div>
-
-        <div className="space-y-2">
-          <p className="text-sm font-semibold">Q2. あなたの年代を選択してください:</p>
+          <p className="text-sm font-semibold">あなたの年代を選択してください</p>
           <select
             className="w-full rounded-md border bg-background p-2 text-sm"
             value={age}
@@ -67,7 +56,7 @@ export default function DemographicsPage() {
           </select>
         </div>
 
-        <div className="space-y-4 border p-4 rounded-md">
+        {/* <div className="space-y-4 border p-4 rounded-md"> */}
           <div className="space-y-2">
             <p className="text-sm font-semibold">あなたの職業について教えてください</p>
             <select
@@ -96,7 +85,7 @@ export default function DemographicsPage() {
                 </option>
               ))}
             </select>
-          </div>
+          {/* </div> */}
 
           <div className="space-y-2">
             <p className="text-sm font-semibold">性別について教えてください</p>

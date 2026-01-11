@@ -92,7 +92,7 @@ export default function PracticePage() {
   };
 
   const handleStartSession = () => {
-    setRemainingTime(8 * 60);
+    setRemainingTime(5 * 60);
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
       setRemainingTime((prev) => {
@@ -103,7 +103,7 @@ export default function PracticePage() {
           setRemainingTime(0);
           setVoiceCompleted(true);
           setStage("post");
-          toast.warning("8分経過しました。アンケートに進んでください。");
+          toast.warning("5分経過しました。アンケートに進んでください。");
           return 0;
         }
         return prev - 1;
@@ -166,10 +166,10 @@ export default function PracticePage() {
           <div>
             <p className="text-sm font-medium">Step 1 / 1</p>
             <p className="text-lg font-semibold">{practiceTask.title}</p>
-            <div className="text-xs text-muted-foreground flex items-center gap-1">
+            {/* <div className="text-xs text-muted-foreground flex items-center gap-1">
               <span>Condition:</span>
               <Badge variant="outline">{practiceTask.condition}</Badge>
-            </div>
+            </div> */}
             <p className="text-sm text-foreground mt-2 leading-6 font-medium">
               {scenarioWithReplacement}
             </p>

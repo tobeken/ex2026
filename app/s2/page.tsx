@@ -435,42 +435,42 @@ export default function Session2Page() {
     {
       key: "mental",
       label: "知的・知覚的要求",
-      desc: "どの程度の知的・知覚的活動を必要としましたか。",
+      desc: "どの程度の知的・知覚的活動（考える、決める、計算する、記憶する、見るなど）を必要としましたか。課題はやさしかったですか難しかったですか、単純でしたか複雑でしたか、正確さが求められましたか大ざっぱでよかったですか。",
       minLabel: "小さい",
       maxLabel: "大きい",
     },
     {
       key: "physical",
       label: "身体的要求",
-      desc: "身体的な活動量はどの程度でしたか。",
+      desc: "どの程度の身体的活動（押す、引く、回す、制御する、動き回るなど）を必要としましたか。作業はラクでしたかキツかったですか、ゆっくりできましたかキビキビやらなければなりませんでしたか、休み休みできましたか働きづめでしたか。",
       minLabel: "小さい",
       maxLabel: "大きい",
     },
     {
       key: "temporal",
       label: "タイムプレッシャー",
-      desc: "時間的切迫感はどの程度でしたか。",
+      desc: "仕事のペースや課題が発生する頻度のために感じる時間的切迫感はどの程度でしたか。ペースはゆっくりとして余裕があるものでしたか、それとも速くて余裕のないものでしたか。",
       minLabel: "弱い",
       maxLabel: "強い",
     },
     {
       key: "performance",
       label: "作業成績",
-      desc: "目標達成度はどの程度でしたか。",
+      desc: "作業指示者（またはあなた自身）によって設定された課題の目標をどの程度達成できたと思いますか。目標の達成に関して自分の作業成績にどの程度満足していますか。",
       minLabel: "良い",
       maxLabel: "悪い",
     },
     {
       key: "effort",
       label: "努力",
-      desc: "精神的・身体的な努力はどの程度必要でしたか。",
+      desc: "作業成績のレベルを達成・維持するために、精神的・身体的にどの程度一生懸命に作業しなければなりませんでしたか。",
       minLabel: "少ない",
       maxLabel: "多い",
     },
     {
       key: "frustration",
       label: "フラストレーション",
-      desc: "不安・落胆・いらいら・ストレスの程度はどのくらいでしたか。",
+      desc: "作業中に不安感、落胆、いらいら、ストレス、悩みをどの程度感じましたか。（不安感、落胆、いらいら、ストレスなどを感じる場合は高い）",
       minLabel: "低い",
       maxLabel: "高い",
     },
@@ -721,7 +721,7 @@ export default function Session2Page() {
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold">Session 2</h1>
         <p className="text-sm text-muted-foreground">
-          2回目（3タスク連続）。音声再生 → Start/Stop → Next の流れです。ID入力は不要です。
+          2回目（3タスク連続）。音声再生 → 対話開始/対話中断 → 完了 の流れです。検索時間は5分です。
         </p>
         {participantId && (
           <p className="text-xs text-muted-foreground">
@@ -747,7 +747,7 @@ export default function Session2Page() {
           </div>
           {stage === "voice" && (
             <Button onClick={handlePlayAudio} disabled={audioPlaying}>
-              {audioPlaying ? "再生中..." : "Play audio"}
+              {audioPlaying ? "再生中..." : "音声再生"}
             </Button>
           )}
         </div>
@@ -755,8 +755,8 @@ export default function Session2Page() {
           <span>
             {stage === "voice"
               ? audioFinished
-                ? "Start で検索を開始できます。"
-                : "Play audio を実行してください。"
+                ? "対話開始 で検索を開始できます。"
+                : "音声再生 を実行してください。"
               : "アンケートに回答してください。"}
           </span>
           {stage === "voice" && remainingTime !== null && (
@@ -872,34 +872,49 @@ export default function Session2Page() {
               })}
             </div>
           </div>
-          <div className="space-y-3">
-            <p className="text-sm font-semibold">Q4. 認知負荷 (NASA-TLX) 各項目（1-5）</p>
+          <div className="space-y-4">
+            <p className="text-sm font-semibold">Q4. 認知負荷 (NASA-TLX)</p>
             <p className="text-xs text-muted-foreground">
-              1〜20のスライダーでお答えください（20段階）。
+              タスクの経験に最も近い各スケール上のポイントをクリックしてください。
             </p>
             {tlxDimensions.map((dim) => (
-              <div key={dim.key} className="space-y-2">
+              <div key={dim.key} className="space-y-2 rounded-lg border border-border/40 bg-muted/20 p-3">
                 <div className="space-y-1">
                   <p className="text-sm font-semibold">{dim.label}</p>
-                  <p className="text-xs text-muted-foreground">{dim.desc}</p>
+                  <p className="text-xs text-red-500 leading-5">{dim.desc}</p>
                 </div>
-                <div className="space-y-1">
+                <div className="space-y-2">
                   <div className="flex justify-between text-xs text-muted-foreground">
                     <span>{dim.minLabel}</span>
                     <span>{dim.maxLabel}</span>
                   </div>
-                  <input
-                    type="range"
-                    min={1}
-                    max={20}
-                    step={1}
-                    value={postAnswers[currentTaskIndex]?.q4?.[dim.key] || 0}
-                    onChange={(e) => handlePostAnswerChange("q4", e.target.value, dim.key)}
-                    className="w-full"
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    現在の値: {postAnswers[currentTaskIndex]?.q4?.[dim.key] || 0}
-                  </p>
+                  <div
+                    className="grid gap-0.5 border border-border/60 rounded-sm p-1 bg-background"
+                    style={{ gridTemplateColumns: "repeat(20, minmax(0, 1fr))" }}
+                  >
+                    {Array.from({ length: 20 }, (_, idx) => {
+                      const value = idx + 1;
+                      const current = postAnswers[currentTaskIndex]?.q4?.[dim.key] || 0;
+                      return (
+                        <label
+                          key={`${dim.key}-${value}`}
+                          className={`h-6 w-full border border-border/50 cursor-pointer transition ${
+                            current === value ? "bg-primary/70" : "bg-background"
+                          }`}
+                        >
+                          <input
+                            type="radio"
+                            name={`tlx-${dim.key}-${currentTaskIndex}`}
+                            value={value}
+                            checked={current === value}
+                            onChange={(e) => handlePostAnswerChange("q4", e.target.value, dim.key)}
+                            className="sr-only"
+                          />
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-muted-foreground">現在の値: {postAnswers[currentTaskIndex]?.q4?.[dim.key] || 0}</p>
                 </div>
               </div>
             ))}

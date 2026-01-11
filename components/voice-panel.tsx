@@ -95,14 +95,14 @@ export function VoicePanel({
             {isSessionActive ? "Active" : "Idle"}
           </span>
           <Button onClick={handleStart} disabled={!canStart || isSessionActive}>
-            Start
+            対話開始
           </Button>
           <Button
             onClick={handleStop}
             variant="secondary"
             disabled={!isSessionActive}
           >
-            Stop
+            対話中断
           </Button>
         </div>
       </div>

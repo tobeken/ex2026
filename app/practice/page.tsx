@@ -32,7 +32,10 @@ export default function PracticePage() {
   const [remainingTime, setRemainingTime] = useState<number | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-  const canStart = !sessionActive && stage === "voice";
+  const canStart =
+    !sessionActive &&
+    stage === "voice" &&
+    (remainingTime === null || remainingTime > 0);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -92,7 +95,7 @@ export default function PracticePage() {
   };
 
   const handleStartSession = () => {
-    setRemainingTime(5 * 60);
+    setRemainingTime((prev) => (prev === null ? 5 * 60 : prev));
     if (timerRef.current) clearInterval(timerRef.current);
     timerRef.current = setInterval(() => {
       setRemainingTime((prev) => {

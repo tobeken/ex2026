@@ -112,7 +112,6 @@ export default function Session2Page() {
   const [turnIndex, setTurnIndex] = useState(0);
   const modalSavedAtRef = useRef<number | null>(null);
   const lastAssistantEndRef = useRef<number | null>(null);
-  const [timerStarted, setTimerStarted] = useState(false);
   const taskStartAtRef = useRef<number | null>(null);
   const combinedStreamGetterRef = useRef<() => MediaStream | null>(() => null);
   const fullRecorderRef = useRef<ActiveRecorder | null>(null);
@@ -430,7 +429,12 @@ export default function Session2Page() {
     return currentTask.scenario;
   })();
 
-  const canStart = stage === "voice" && audioFinished && !audioPlaying && !timerStarted;
+  const canStart =
+    !sessionActive &&
+    stage === "voice" &&
+    audioFinished &&
+    !audioPlaying &&
+    (remainingTime === null || remainingTime > 0);
 
   const tlxDimensions = [
     {
@@ -562,7 +566,6 @@ export default function Session2Page() {
     setAudioPlaying(false);
     setAudioFinished(false);
     setVoiceCompleted(false);
-    setTimerStarted(false);
     setRemainingTime(null);
     setStage("voice");
     stopFullRecordingAndUpload();
@@ -578,7 +581,6 @@ export default function Session2Page() {
   const handleTaskComplete = () => {
     if (sessionActive) return;
     setVoiceCompleted(true);
-    setTimerStarted(false);
     setStage("post");
     // このタスクのポストアンケから再開できるように保持（完了送信時に次タスクへ進める）
     persistStage(currentTaskIndex, "post");
@@ -675,7 +677,6 @@ export default function Session2Page() {
 
   const handleStartSession = () => {
     if (timerRef.current) return;
-    setTimerStarted(true);
     setRemainingTime((prev) => (prev === null ? 5 * 60 : prev));
     startFullRecording();
     const now = Date.now();
@@ -695,7 +696,6 @@ export default function Session2Page() {
           timerRef.current = null;
           setRemainingTime(0);
           setVoiceCompleted(true);
-          setTimerStarted(false);
           setStage("post");
           toast.warning("5分経過しました。アンケートに進んでください。");
           const started = taskStartAtRef.current ?? Date.now() - 5 * 60 * 1000;

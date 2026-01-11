@@ -506,15 +506,15 @@ export default function useWebRTCAudioSession(
    */
   async function startSession() {
     try {
-      setStatus("Requesting microphone access...");
+      setStatus("マイクアクセス中");
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioStreamRef.current = stream;
       setupAudioVisualization(stream);
 
-      setStatus("Fetching ephemeral token...");
+      setStatus("セッション接続中...");
       const ephemeralToken = await getEphemeralToken();
 
-      setStatus("Establishing connection...");
+      setStatus("対話準備中...");
       const pc = new RTCPeerConnection();
       peerConnectionRef.current = pc;
 
@@ -600,7 +600,7 @@ export default function useWebRTCAudioSession(
       await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
 
       setIsSessionActive(true);
-      setStatus("Session established successfully!");
+      setStatus("対話セッション確立！");
     } catch (err) {
       console.error("startSession error:", err);
       setStatus(`Error: ${err}`);
@@ -668,7 +668,7 @@ export default function useWebRTCAudioSession(
 
     setCurrentVolume(0);
     setIsSessionActive(false);
-    setStatus("Session stopped");
+    setStatus("対話セッション停止中");
     setMsgs([]);
     setConversation([]);
   }

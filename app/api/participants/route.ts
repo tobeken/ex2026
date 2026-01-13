@@ -4,29 +4,47 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import prisma from "@/lib/prisma";
 
+const GROUPS = ["G1", "G2", "G3", "G4", "G5", "G6", "G7", "G8", "G9"] as const;
+type GroupId = (typeof GROUPS)[number];
+
 const createSchema = z.object({
   id: z.string().min(1),
-  group: z.enum(["G1", "G2", "G3"]).optional(),
+  group: z.enum(GROUPS).optional(),
 });
 
-const assignmentPlan = {
-  // Latin square的な割当を仮定
-  G1: [
-    { orderIndex: 1, taskId: "BIRTHDAY_GIFT", conditionId: "SUMMARY" },
-    { orderIndex: 2, taskId: "FAREWELL_PARTY", conditionId: "NARRATIVE" },
-    { orderIndex: 3, taskId: "WEEKEND_TRIP", conditionId: "NONE" },
-  ],
-  G2: [
-    { orderIndex: 1, taskId: "FAREWELL_PARTY", conditionId: "SUMMARY" },
-    { orderIndex: 2, taskId: "WEEKEND_TRIP", conditionId: "NARRATIVE" },
-    { orderIndex: 3, taskId: "BIRTHDAY_GIFT", conditionId: "NONE" },
-  ],
-  G3: [
-    { orderIndex: 1, taskId: "WEEKEND_TRIP", conditionId: "SUMMARY" },
-    { orderIndex: 2, taskId: "BIRTHDAY_GIFT", conditionId: "NARRATIVE" },
-    { orderIndex: 3, taskId: "FAREWELL_PARTY", conditionId: "NONE" },
-  ],
-} as const;
+const TASK_ORDERS = [
+  ["BIRTHDAY_GIFT", "FAREWELL_PARTY", "WEEKEND_TRIP"],
+  ["FAREWELL_PARTY", "WEEKEND_TRIP", "BIRTHDAY_GIFT"],
+  ["WEEKEND_TRIP", "BIRTHDAY_GIFT", "FAREWELL_PARTY"],
+] as const;
+
+const CONDITION_ORDERS = [
+  ["SUMMARY", "NARRATIVE", "NONE"],
+  ["NARRATIVE", "NONE", "SUMMARY"],
+  ["NONE", "SUMMARY", "NARRATIVE"],
+] as const;
+
+const buildPlan = (
+  tasks: (typeof TASK_ORDERS)[number],
+  conditions: (typeof CONDITION_ORDERS)[number]
+) =>
+  tasks.map((taskId, idx) => ({
+    orderIndex: idx + 1,
+    taskId,
+    conditionId: conditions[idx],
+  }));
+
+const assignmentPlan: Record<GroupId, ReturnType<typeof buildPlan>> = {
+  G1: buildPlan(TASK_ORDERS[0], CONDITION_ORDERS[0]),
+  G2: buildPlan(TASK_ORDERS[1], CONDITION_ORDERS[0]),
+  G3: buildPlan(TASK_ORDERS[2], CONDITION_ORDERS[0]),
+  G4: buildPlan(TASK_ORDERS[0], CONDITION_ORDERS[1]),
+  G5: buildPlan(TASK_ORDERS[1], CONDITION_ORDERS[1]),
+  G6: buildPlan(TASK_ORDERS[2], CONDITION_ORDERS[1]),
+  G7: buildPlan(TASK_ORDERS[0], CONDITION_ORDERS[2]),
+  G8: buildPlan(TASK_ORDERS[1], CONDITION_ORDERS[2]),
+  G9: buildPlan(TASK_ORDERS[2], CONDITION_ORDERS[2]),
+};
 
 export async function GET() {
   try {
@@ -66,13 +84,22 @@ export async function POST(req: Request) {
             by: ["group"],
             _count: true,
           });
-          const countMap: Record<string, number> = { G1: 0, G2: 0, G3: 0 };
+          const countMap: Record<GroupId, number> = {
+            G1: 0,
+            G2: 0,
+            G3: 0,
+            G4: 0,
+            G5: 0,
+            G6: 0,
+            G7: 0,
+            G8: 0,
+            G9: 0,
+          };
           counts.forEach((c) => {
-            countMap[c.group] = c._count;
+            countMap[c.group as GroupId] = c._count;
           });
-          // 最小件数のグループを優先（G1,G2,G3の順でタイブレーク）
-          const order: Array<"G1" | "G2" | "G3"> = ["G1", "G2", "G3"];
-          order.sort((a, b) => countMap[a] - countMap[b]);
+          // 最小件数のグループを優先（G1..G9の順でタイブレーク）
+          const order = [...GROUPS].sort((a, b) => countMap[a] - countMap[b]);
           resolvedGroup = order[0];
         }
       }

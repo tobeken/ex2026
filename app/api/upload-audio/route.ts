@@ -9,6 +9,12 @@ const serviceKey =
 
 const BUCKET = process.env.CONVERSATION_AUDIO_BUCKET || "conversation-audio";
 
+const sanitizeSegment = (value: string) => {
+  const normalized = value.trim().normalize("NFKC");
+  const cleaned = normalized.replace(/[^a-zA-Z0-9._-]/g, "_");
+  return cleaned || "unknown";
+};
+
 export async function POST(req: Request) {
   if (!supabaseUrl || !serviceKey) {
     return NextResponse.json(
@@ -36,7 +42,9 @@ export async function POST(req: Request) {
   }
 
   const ext = file.type?.split("/").pop() || "webm";
-  const path = `${session}/${participantId}/${taskId}/${role}-${turnId}.${ext}`;
+  const path = `${sanitizeSegment(session)}/${sanitizeSegment(participantId)}/${sanitizeSegment(
+    taskId
+  )}/${sanitizeSegment(role)}-${sanitizeSegment(turnId)}.${ext}`;
 
   const supabase = createClient(supabaseUrl, serviceKey);
   const { error } = await supabase.storage.from(BUCKET).upload(path, file, {

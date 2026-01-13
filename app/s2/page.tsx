@@ -19,7 +19,7 @@ import { uploadAudio } from "@/lib/upload-audio";
 import { startRecorder, stopRecorder, type ActiveRecorder } from "@/lib/recorder";
 
 type TaskId = "BIRTHDAY_GIFT" | "FAREWELL_PARTY" | "WEEKEND_TRIP";
-type GroupId = "G1" | "G2" | "G3";
+type GroupId = "G1" | "G2" | "G3" | "G4" | "G5" | "G6" | "G7" | "G8" | "G9";
 const createPostAnswer = () => ({
   q1: "",
   q2: 0,
@@ -57,25 +57,31 @@ const TASK_CATALOG: Record<
   },
 };
 
-const ASSIGNMENT_PLAN: Record<
-  GroupId,
-  { taskId: TaskId; condition: string }[]
-> = {
-  G1: [
-    { taskId: "BIRTHDAY_GIFT", condition: "SUMMARY" },
-    { taskId: "FAREWELL_PARTY", condition: "NARRATIVE" },
-    { taskId: "WEEKEND_TRIP", condition: "NONE" },
-  ],
-  G2: [
-    { taskId: "FAREWELL_PARTY", condition: "SUMMARY" },
-    { taskId: "WEEKEND_TRIP", condition: "NARRATIVE" },
-    { taskId: "BIRTHDAY_GIFT", condition: "NONE" },
-  ],
-  G3: [
-    { taskId: "WEEKEND_TRIP", condition: "SUMMARY" },
-    { taskId: "BIRTHDAY_GIFT", condition: "NARRATIVE" },
-    { taskId: "FAREWELL_PARTY", condition: "NONE" },
-  ],
+const TASK_ORDERS: TaskId[][] = [
+  ["BIRTHDAY_GIFT", "FAREWELL_PARTY", "WEEKEND_TRIP"],
+  ["FAREWELL_PARTY", "WEEKEND_TRIP", "BIRTHDAY_GIFT"],
+  ["WEEKEND_TRIP", "BIRTHDAY_GIFT", "FAREWELL_PARTY"],
+];
+
+const CONDITION_ORDERS = [
+  ["SUMMARY", "NARRATIVE", "NONE"],
+  ["NARRATIVE", "NONE", "SUMMARY"],
+  ["NONE", "SUMMARY", "NARRATIVE"],
+];
+
+const buildPlan = (tasks: TaskId[], conditions: string[]) =>
+  tasks.map((taskId, idx) => ({ taskId, condition: conditions[idx] }));
+
+const ASSIGNMENT_PLAN: Record<GroupId, { taskId: TaskId; condition: string }[]> = {
+  G1: buildPlan(TASK_ORDERS[0], CONDITION_ORDERS[0]),
+  G2: buildPlan(TASK_ORDERS[1], CONDITION_ORDERS[0]),
+  G3: buildPlan(TASK_ORDERS[2], CONDITION_ORDERS[0]),
+  G4: buildPlan(TASK_ORDERS[0], CONDITION_ORDERS[1]),
+  G5: buildPlan(TASK_ORDERS[1], CONDITION_ORDERS[1]),
+  G6: buildPlan(TASK_ORDERS[2], CONDITION_ORDERS[1]),
+  G7: buildPlan(TASK_ORDERS[0], CONDITION_ORDERS[2]),
+  G8: buildPlan(TASK_ORDERS[1], CONDITION_ORDERS[2]),
+  G9: buildPlan(TASK_ORDERS[2], CONDITION_ORDERS[2]),
 };
 
 const STORAGE_KEY = "taskCustomNotes";

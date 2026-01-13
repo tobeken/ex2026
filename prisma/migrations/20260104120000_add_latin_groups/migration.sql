@@ -1,0 +1,7 @@
+-- Add LatinGroup enum values for 9-group Latin square
+ALTER TYPE "LatinGroup" ADD VALUE IF NOT EXISTS 'G4';
+ALTER TYPE "LatinGroup" ADD VALUE IF NOT EXISTS 'G5';
+ALTER TYPE "LatinGroup" ADD VALUE IF NOT EXISTS 'G6';
+ALTER TYPE "LatinGroup" ADD VALUE IF NOT EXISTS 'G7';
+ALTER TYPE "LatinGroup" ADD VALUE IF NOT EXISTS 'G8';
+ALTER TYPE "LatinGroup" ADD VALUE IF NOT EXISTS 'G9';

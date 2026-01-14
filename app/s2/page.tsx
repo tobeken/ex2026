@@ -166,6 +166,25 @@ export default function Session2Page() {
   }, [orderedTasks, router]);
 
   useEffect(() => {
+    const fetchNotes = async () => {
+      if (!participantId || orderedTasks.length === 0) return;
+      try {
+        const res = await fetch(
+          `/api/task-notes?participantId=${encodeURIComponent(participantId)}`
+        );
+        if (!res.ok) return;
+        const rows: Array<{ taskId: TaskId; note: string }> = await res.json();
+        const map = new Map(rows.map((r) => [r.taskId, r.note]));
+        const nextNotes = orderedTasks.map((t) => map.get(t.taskId) || "");
+        setCustomNotes(nextNotes);
+      } catch (e) {
+        console.warn("failed to fetch task notes", e);
+      }
+    };
+    fetchNotes();
+  }, [participantId, orderedTasks]);
+
+  useEffect(() => {
     const checkAccess = async () => {
       if (!participantId) return;
       try {

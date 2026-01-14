@@ -191,8 +191,11 @@ export default function Session2Page() {
           return;
         }
         const rows: Array<{ role: "user" | "assistant"; text: string | null }> = await res.json();
-        const filtered = rows
-          .filter((row) => typeof row.text === "string" && row.text.trim().length > 0)
+        const filtered: HistoryMessage[] = rows
+          .filter(
+            (row): row is { role: "user" | "assistant"; text: string } =>
+              typeof row.text === "string" && row.text.trim().length > 0
+          )
           .map((row) => ({ role: row.role, text: row.text }));
         setHistoryMessages(filtered);
         setHistoryLoading(false);

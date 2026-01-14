@@ -17,6 +17,47 @@ const turnSchema = z.object({
 });
 
 const bulkSchema = z.array(turnSchema);
+const querySchema = z.object({
+  participantId: z.string().min(1),
+  session: z.string().min(1),
+  taskId: z.string().min(1),
+});
+
+export async function GET(req: Request) {
+  try {
+    const url = new URL(req.url);
+    const query = querySchema.parse({
+      participantId: url.searchParams.get("participantId"),
+      session: url.searchParams.get("session"),
+      taskId: url.searchParams.get("taskId"),
+    });
+
+    const turns = await prisma.conversationTurn.findMany({
+      where: {
+        participantId: query.participantId,
+        session: query.session,
+        taskId: query.taskId,
+        text: { not: null },
+      },
+      orderBy: [{ turnIndex: "asc" }],
+      select: {
+        role: true,
+        text: true,
+        startedAt: true,
+        endedAt: true,
+      },
+    });
+
+    return NextResponse.json(turns);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return NextResponse.json({ error: error.issues }, { status: 400 });
+    }
+    const msg = error instanceof Error ? error.message : String(error ?? "Unknown error");
+    console.error("GET /api/conversation/turns error", msg);
+    return NextResponse.json({ error: "Failed to fetch turns", detail: msg }, { status: 500 });
+  }
+}
 
 export async function POST(req: Request) {
   try {

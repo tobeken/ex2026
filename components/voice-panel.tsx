@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect } from "react";
-import useWebRTCAudioSession from "@/hooks/use-webrtc";
+import useWebRTCAudioSession, { type HistoryMessage } from "@/hooks/use-webrtc";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 
@@ -9,6 +9,7 @@ type VoicePanelProps = {
   voice?: string;
   canStart?: boolean;
   title?: string;
+  initialMessages?: HistoryMessage[];
   onSessionStateChange?: (active: boolean) => void;
   onStart?: () => void;
   onStop?: () => void;
@@ -24,6 +25,7 @@ export function VoicePanel({
   voice = "ash",
   canStart = true,
   title = "Voice Session",
+  initialMessages,
   onSessionStateChange,
   onStart,
   onStop,
@@ -64,7 +66,7 @@ export function VoicePanel({
     if (!canStart || isSessionActive) return;
     try {
       onStart?.();
-      await startSession();
+      await startSession(initialMessages);
     } catch (error) {
       console.error("Failed to start session:", error);
     }

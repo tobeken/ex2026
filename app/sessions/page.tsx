@@ -22,6 +22,30 @@ export default function SessionsPage() {
     }
   }, []);
 
+  useEffect(() => {
+    const fetchProgress = async () => {
+      if (!participantId) return;
+      try {
+        const res = await fetch(
+          `/api/progress?participantId=${encodeURIComponent(participantId)}`
+        );
+        if (!res.ok) return;
+        const rows: Array<{ session: string; completed: boolean }> = await res.json();
+        const s1 = rows.find((r) => r.session === "s1")?.completed ?? false;
+        const s2 = rows.find((r) => r.session === "s2")?.completed ?? false;
+        setSession1Done(s1);
+        setSession2Done(s2);
+        if (typeof window !== "undefined") {
+          window.sessionStorage.setItem("session1Done", s1 ? "true" : "false");
+          window.sessionStorage.setItem("session2Done", s2 ? "true" : "false");
+        }
+      } catch (e) {
+        console.warn("failed to fetch progress", e);
+      }
+    };
+    fetchProgress();
+  }, [participantId]);
+
   const hasId = participantId.trim().length > 0;
 
   return (

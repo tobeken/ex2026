@@ -12,6 +12,11 @@ export interface Tool {
   parameters?: Record<string, any>;
 }
 
+export type HistoryMessage = {
+  role: "user" | "assistant";
+  text: string;
+};
+
 /**
  * The return type for the hook, matching Approach A
  * (RefObject<HTMLDivElement | null> for the audioIndicatorRef).
@@ -20,7 +25,7 @@ interface UseWebRTCAudioSessionReturn {
   status: string;
   isSessionActive: boolean;
   audioIndicatorRef: React.RefObject<HTMLDivElement | null>;
-  startSession: () => Promise<void>;
+  startSession: (history?: HistoryMessage[]) => Promise<void>;
   stopSession: () => void;
   handleStartStopClick: () => void;
   registerFunction: (name: string, fn: Function) => void;
@@ -101,6 +106,7 @@ export default function useWebRTCAudioSession(
   const mixDestinationRef = useRef<MediaStreamAudioDestinationNode | null>(null);
   const mixMicSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
   const mixAssistantSourceRef = useRef<MediaStreamAudioSourceNode | null>(null);
+  const pendingHistoryRef = useRef<HistoryMessage[] | null>(null);
 
   /**
    * We track only the ephemeral user message **ID** here.
@@ -118,6 +124,28 @@ export default function useWebRTCAudioSession(
   /**
    * Configure the data channel on open, sending a session update to the server.
    */
+  function sendHistoryMessages(dataChannel: RTCDataChannel, history?: HistoryMessage[] | null) {
+    if (!history || history.length === 0) return;
+    history.forEach((msg) => {
+      const contentType = msg.role === "assistant" ? "output_text" : "input_text";
+      dataChannel.send(
+        JSON.stringify({
+          type: "conversation.item.create",
+          item: {
+            type: "message",
+            role: msg.role,
+            content: [
+              {
+                type: contentType,
+                text: msg.text,
+              },
+            ],
+          },
+        })
+      );
+    });
+  }
+
   function configureDataChannel(dataChannel: RTCDataChannel) {
     // Send session update
     const sessionUpdate = {
@@ -504,8 +532,9 @@ export default function useWebRTCAudioSession(
   /**
    * Start a new session:
    */
-  async function startSession() {
+  async function startSession(history?: HistoryMessage[]) {
     try {
+      pendingHistoryRef.current = history ?? null;
       setStatus("マイクアクセス中");
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       audioStreamRef.current = stream;
@@ -561,6 +590,10 @@ export default function useWebRTCAudioSession(
       dataChannel.onopen = () => {
         // console.log("Data channel open");
         configureDataChannel(dataChannel);
+        if (pendingHistoryRef.current?.length) {
+          sendHistoryMessages(dataChannel, pendingHistoryRef.current);
+          pendingHistoryRef.current = null;
+        }
       };
       dataChannel.onmessage = handleDataChannelMessage;
 

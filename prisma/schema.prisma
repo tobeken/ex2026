@@ -18,6 +18,7 @@ model Participant {
   conversationTimings   ConversationTiming[]
   conversationTurns     ConversationTurn[]
   playbackAssets        PlaybackAsset[]
+  progressRecords       ParticipantProgress[]
   surveyResponses       SurveyResponse[]
 }
 

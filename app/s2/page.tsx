@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import VoicePanel from "@/components/voice-panel";
+import type { HistoryMessage } from "@/hooks/use-webrtc";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -123,6 +124,8 @@ export default function Session2Page() {
   const fullRecorderRef = useRef<ActiveRecorder | null>(null);
   const fullStartedAtRef = useRef<number | null>(null);
   const [fullRecordingActive, setFullRecordingActive] = useState(false);
+  const [historyMessages, setHistoryMessages] = useState<HistoryMessage[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
 
   const orderedTasks = useMemo(() => {
     const plan = ASSIGNMENT_PLAN[participantGroup] || ASSIGNMENT_PLAN.G1;
@@ -171,6 +174,36 @@ export default function Session2Page() {
       setCanAccess(true);
     }
   }, [orderedTasks, router]);
+
+  useEffect(() => {
+    const fetchHistory = async () => {
+      if (!participantId || !currentTask) return;
+      setHistoryLoading(true);
+      try {
+        const res = await fetch(
+          `/api/conversation/turns?participantId=${encodeURIComponent(
+            participantId
+          )}&session=s1&taskId=${encodeURIComponent(currentTask.taskId)}`
+        );
+        if (!res.ok) {
+          setHistoryMessages([]);
+          setHistoryLoading(false);
+          return;
+        }
+        const rows: Array<{ role: "user" | "assistant"; text: string | null }> = await res.json();
+        const filtered = rows
+          .filter((row) => typeof row.text === "string" && row.text.trim().length > 0)
+          .map((row) => ({ role: row.role, text: row.text }));
+        setHistoryMessages(filtered);
+        setHistoryLoading(false);
+      } catch (e) {
+        console.warn("failed to fetch s1 history", e);
+        setHistoryMessages([]);
+        setHistoryLoading(false);
+      }
+    };
+    fetchHistory();
+  }, [participantId, currentTask]);
 
   useEffect(() => {
     setCurrentTaskIndex(0);
@@ -440,6 +473,7 @@ export default function Session2Page() {
     stage === "voice" &&
     audioFinished &&
     !audioPlaying &&
+    !historyLoading &&
     (remainingTime === null || remainingTime > 0);
 
   const tlxDimensions = [
@@ -782,6 +816,7 @@ export default function Session2Page() {
       <VoicePanel
         title="VoicePanel"
         canStart={canStart}
+        initialMessages={historyMessages}
         onSessionStateChange={setSessionActive}
         onStart={handleStartSession}
         onStop={() => {

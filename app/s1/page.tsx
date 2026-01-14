@@ -126,6 +126,26 @@ export default function Session1Page() {
   }, [orderedTasks]);
 
   useEffect(() => {
+    const fetchNotes = async () => {
+      if (!participantId || orderedTasks.length === 0) return;
+      try {
+        const res = await fetch(
+          `/api/task-notes?participantId=${encodeURIComponent(participantId)}`
+        );
+        if (!res.ok) return;
+        const rows: Array<{ taskId: TaskId; note: string }> = await res.json();
+        const map = new Map(rows.map((r) => [r.taskId, r.note]));
+        const nextNotes = orderedTasks.map((t) => map.get(t.taskId) || "");
+        setCustomNotes(nextNotes);
+        setNoteSaved(nextNotes.map((n) => n.trim().length > 0));
+      } catch (e) {
+        console.warn("failed to fetch task notes", e);
+      }
+    };
+    fetchNotes();
+  }, [participantId, orderedTasks]);
+
+  useEffect(() => {
     setCurrentTaskIndex(0);
     setStage("survey");
     setVoiceCompleted(false);
@@ -252,6 +272,19 @@ export default function Session1Page() {
     setCustomNotes(next);
     if (typeof window !== "undefined") {
       window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+    }
+  };
+
+  const persistNoteToDb = async (taskId: TaskId, note: string) => {
+    if (!participantId) return;
+    try {
+      await fetch("/api/task-notes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ participantId, taskId, note }),
+      });
+    } catch (e) {
+      console.warn("failed to save task note", e);
     }
   };
 
@@ -484,13 +517,14 @@ export default function Session1Page() {
     lastAssistantEndRef.current = null;
   };
 
-  const handleSaveNote = () => {
+  const handleSaveNote = async () => {
     const next = [...customNotes];
     next[currentTaskIndex] = currentNote;
     persistNotes(next);
     const savedNext = [...noteSaved];
     savedNext[currentTaskIndex] = currentNote.trim().length > 0;
     setNoteSaved(savedNext);
+    await persistNoteToDb(currentTask.taskId, currentNote);
     toast.success("保存しました");
   };
 

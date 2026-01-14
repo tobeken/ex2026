@@ -19,6 +19,7 @@ model Participant {
   conversationTurns     ConversationTurn[]
   playbackAssets        PlaybackAsset[]
   progressRecords       ParticipantProgress[]
+  taskNotes             TaskNote[]
   surveyResponses       SurveyResponse[]
 }
 
@@ -131,6 +132,20 @@ model ParticipantProgress {
   participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
 
   @@unique([participantId, session])
+  @@index([participantId])
+}
+
+model TaskNote {
+  id            String      @id @default(cuid())
+  participantId String
+  taskId        TaskId
+  note          String
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([participantId, taskId])
   @@index([participantId])
 }
 

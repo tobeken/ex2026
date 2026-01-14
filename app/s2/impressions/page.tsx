@@ -52,6 +52,21 @@ export default function ImpressionsPage() {
       if (typeof window !== "undefined") {
         window.sessionStorage.setItem("session2Done", "true");
       }
+      try {
+        await fetch("/api/progress", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            participantId,
+            session: "s2",
+            taskIndex: 2,
+            stage: "complete",
+            completed: true,
+          }),
+        });
+      } catch (e) {
+        console.warn("failed to mark s2 complete", e);
+      }
       router.push("/s2/complete");
     } catch (e) {
       console.error("s2 impressions submit error", e);

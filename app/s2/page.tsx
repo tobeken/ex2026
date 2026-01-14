@@ -49,7 +49,7 @@ const TASK_CATALOG: Record<
   FAREWELL_PARTY: {
     title: "トピック: 歓送迎会の計画",
     scenario:
-      "お世話になっている人が、来月仕事をやめることになりました。あなたは、幹事となったので、歓送迎会を考えることになりました。予算、人数、開催場所、時間などを調べ、複数案の歓送迎会の企画を比較しながら、現実的な歓送迎会プランを考えてください。",
+      "バイト先や研究でお世話になっている人が、卒業し、来月から東京で就職することになりました。あなたは、幹事となったので、歓送迎会を考えることになりました。予算、人数、開催場所、時間などを調べ、複数案の歓送迎会の企画を比較しながら、現実的な歓送迎会プランを考えてください。",
   },
   WEEKEND_TRIP: {
     title: "トピック: 休日旅行の計画",
@@ -140,16 +140,6 @@ export default function Session2Page() {
 
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const s2done = window.sessionStorage.getItem("session2Done") === "true";
-      if (s2done) {
-        router.replace("/sessions");
-        return;
-      }
-      const s1done = window.sessionStorage.getItem("session1Done") === "true";
-      if (!s1done) {
-        router.replace("/sessions");
-        return;
-      }
       const stored = window.sessionStorage.getItem("participantId") || "";
       setParticipantId(stored);
       const storedGroup =
@@ -174,6 +164,52 @@ export default function Session2Page() {
       setCanAccess(true);
     }
   }, [orderedTasks, router]);
+
+  useEffect(() => {
+    const checkAccess = async () => {
+      if (!participantId) return;
+      try {
+        const [s1Res, s2Res] = await Promise.all([
+          fetch(
+            `/api/progress?participantId=${encodeURIComponent(participantId)}&session=s1`
+          ),
+          fetch(
+            `/api/progress?participantId=${encodeURIComponent(participantId)}&session=s2`
+          ),
+        ]);
+        if (s2Res.ok) {
+          const s2Progress = await s2Res.json();
+          if (s2Progress?.completed) {
+            if (typeof window !== "undefined") {
+              window.sessionStorage.setItem("session2Done", "true");
+            }
+            router.replace("/sessions");
+            return;
+          }
+        }
+        if (s1Res.ok) {
+          const s1Progress = await s1Res.json();
+          if (!s1Progress?.completed) {
+            router.replace("/sessions");
+            return;
+          }
+          if (typeof window !== "undefined") {
+            window.sessionStorage.setItem("session1Done", "true");
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to check s1/s2 progress", e);
+        if (typeof window !== "undefined") {
+          const s2done = window.sessionStorage.getItem("session2Done") === "true";
+          const s1done = window.sessionStorage.getItem("session1Done") === "true";
+          if (s2done || !s1done) {
+            router.replace("/sessions");
+          }
+        }
+      }
+    };
+    checkAccess();
+  }, [participantId, router]);
 
   useEffect(() => {
     const fetchHistory = async () => {
@@ -241,7 +277,37 @@ export default function Session2Page() {
   useEffect(() => {
     const applyProgress = async () => {
       if (!participantId || orderedTasks.length === 0 || progressApplied) return;
-      // 1) sessionStorage から進行中ステージ復元
+      try {
+        const progressRes = await fetch(
+          `/api/progress?participantId=${encodeURIComponent(participantId)}&session=s2`
+        );
+        if (progressRes.ok) {
+          const progress = await progressRes.json();
+          if (progress?.completed) {
+            if (typeof window !== "undefined") {
+              window.sessionStorage.setItem("session2Done", "true");
+            }
+            router.replace("/sessions");
+            return;
+          }
+          if (
+            typeof progress?.taskIndex === "number" &&
+            progress.taskIndex >= 0 &&
+            progress.taskIndex < orderedTasks.length
+          ) {
+            setCurrentTaskIndex(progress.taskIndex);
+            if (progress.stage === "post" || progress.stage === "voice") {
+              setStage(progress.stage);
+            }
+            setProgressApplied(true);
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to load progress for s2", e);
+      }
+
+      // fallback: sessionStorage
       if (typeof window !== "undefined") {
         const storedIdx = Number(window.sessionStorage.getItem(PROGRESS_IDX_KEY) || "0");
         const storedStage =
@@ -249,8 +315,8 @@ export default function Session2Page() {
           null;
         if (!Number.isNaN(storedIdx) && storedIdx >= 0 && storedIdx < orderedTasks.length) {
           setCurrentTaskIndex(storedIdx);
-          if (storedStage === "post") {
-            setStage("post");
+          if (storedStage === "post" || storedStage === "voice") {
+            setStage(storedStage);
           }
         }
       }
@@ -284,10 +350,26 @@ export default function Session2Page() {
     applyProgress();
   }, [participantId, orderedTasks, progressApplied, router]);
 
-  const persistStage = (idx: number, st: "voice" | "post") => {
-    if (typeof window === "undefined") return;
-    window.sessionStorage.setItem(PROGRESS_IDX_KEY, String(idx));
-    window.sessionStorage.setItem(PROGRESS_STAGE_KEY, st);
+  const persistStage = async (idx: number, st: "voice" | "post") => {
+    if (typeof window !== "undefined") {
+      window.sessionStorage.setItem(PROGRESS_IDX_KEY, String(idx));
+      window.sessionStorage.setItem(PROGRESS_STAGE_KEY, st);
+    }
+    try {
+      await fetch("/api/progress", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          participantId,
+          session: "s2",
+          taskIndex: idx,
+          stage: st,
+          completed: false,
+        }),
+      });
+    } catch (e) {
+      console.warn("failed to persist s2 progress", e);
+    }
   };
 
   const startFullRecording = () => {

@@ -117,6 +117,22 @@ model ConversationSummary {
   @@index([session, taskId])
 }
 
+model ParticipantProgress {
+  id            String   @id @default(cuid())
+  participantId String
+  session       String
+  taskIndex     Int      @default(0)
+  stage         String   @default("survey")
+  completed     Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  participant Participant @relation(fields: [participantId], references: [id], onDelete: Cascade)
+
+  @@unique([participantId, session])
+  @@index([participantId])
+}
+
 enum TaskId {
   BIRTHDAY_GIFT
   FAREWELL_PARTY

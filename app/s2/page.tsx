@@ -944,7 +944,6 @@ export default function Session2Page() {
         onStart={handleStartSession}
         onStop={() => {
           postTiming([{ event: "session_stop" }]);
-          stopFullRecordingAndUpload();
         }}
         onUserSpeechStart={(ts) => {
           if (lastAssistantEndRef.current) {

@@ -712,7 +712,6 @@ export default function Session1Page() {
           onStart={handleStartSession}
           onStop={() => {
             postTiming([{ event: "session_stop" }]);
-            stopFullRecordingAndUpload();
           }}
           onCombinedStreamReady={(getter) => {
             combinedStreamGetterRef.current = getter;

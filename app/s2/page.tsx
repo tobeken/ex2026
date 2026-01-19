@@ -123,6 +123,7 @@ export default function Session2Page() {
   const combinedStreamGetterRef = useRef<() => MediaStream | null>(() => null);
   const fullRecorderRef = useRef<ActiveRecorder | null>(null);
   const fullStartedAtRef = useRef<number | null>(null);
+  const fullRecordingRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [fullRecordingActive, setFullRecordingActive] = useState(false);
   const [historyMessages, setHistoryMessages] = useState<HistoryMessage[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -395,10 +396,20 @@ export default function Session2Page() {
     if (fullRecorderRef.current) return;
     const stream = combinedStreamGetterRef.current?.();
     if (!stream) {
+      if (fullRecordingRetryRef.current === null) {
+        fullRecordingRetryRef.current = setTimeout(() => {
+          fullRecordingRetryRef.current = null;
+          startFullRecording();
+        }, 500);
+      }
       console.warn("full recording start skipped: no combined stream");
       return;
     }
     try {
+      if (fullRecordingRetryRef.current) {
+        clearTimeout(fullRecordingRetryRef.current);
+        fullRecordingRetryRef.current = null;
+      }
       fullRecorderRef.current = startRecorder(stream);
       fullStartedAtRef.current = Date.now();
       setFullRecordingActive(true);
@@ -408,7 +419,14 @@ export default function Session2Page() {
   };
 
   const stopFullRecordingAndUpload = async () => {
-    if (!fullRecorderRef.current) return;
+    if (!fullRecorderRef.current) {
+      console.warn("full recording stop skipped: no active recorder");
+      return;
+    }
+    if (fullRecordingRetryRef.current) {
+      clearTimeout(fullRecordingRetryRef.current);
+      fullRecordingRetryRef.current = null;
+    }
     const startedAt = fullStartedAtRef.current ?? Date.now();
     const endedAt = Date.now();
     let blob: Blob | null = null;
@@ -846,6 +864,7 @@ export default function Session2Page() {
           const durationMs = Math.min(5 * 60 * 1000, Date.now() - started);
           postTiming([{ event: "session_stop", extra: { searchDurationMs: durationMs } }]);
           taskStartAtRef.current = null;
+          stopFullRecordingAndUpload();
           return 0;
         }
         return prev - 1;
@@ -925,7 +944,6 @@ export default function Session2Page() {
         onStart={handleStartSession}
         onStop={() => {
           postTiming([{ event: "session_stop" }]);
-          stopFullRecordingAndUpload();
         }}
         onUserSpeechStart={(ts) => {
           if (lastAssistantEndRef.current) {

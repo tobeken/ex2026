@@ -7,6 +7,12 @@ export type UploadAudioParams = {
   file: Blob;
 };
 
+const sanitizeSegment = (value: string) => {
+  const normalized = value.trim().normalize("NFKC");
+  const cleaned = normalized.replace(/[^a-zA-Z0-9._-]/g, "_");
+  return cleaned || "unknown";
+};
+
 export async function uploadAudio({
   participantId,
   taskId,
@@ -15,28 +21,33 @@ export async function uploadAudio({
   role,
   file,
 }: UploadAudioParams): Promise<string | undefined> {
-  const formData = new FormData();
-  formData.append("participantId", participantId);
-  formData.append("taskId", taskId);
-  formData.append("session", session);
-  formData.append("turnId", turnId);
-  formData.append("role", role);
-  formData.append("file", file, `${role}-${turnId}.webm`);
-
-  const res = await fetch("/api/upload-audio", {
-    method: "POST",
-    body: formData,
-  });
-
-  if (!res.ok) {
-    console.warn("upload audio failed", await res.text());
+  if (typeof window === "undefined") {
+    console.warn("uploadAudio should be called from the browser");
     return undefined;
   }
 
-  const data = (await res.json()) as { url?: string; path?: string } | null;
-  if (!data || !data.url) {
+  const { supabaseClient } = await import("@/lib/supabase-client");
+  const bucket =
+    process.env.NEXT_PUBLIC_CONVERSATION_AUDIO_BUCKET || "conversation-audio";
+  const ext = file.type?.split("/").pop() || "webm";
+  const path = `${sanitizeSegment(session)}/${sanitizeSegment(participantId)}/${sanitizeSegment(
+    taskId
+  )}/${sanitizeSegment(role)}-${sanitizeSegment(turnId)}.${ext}`;
+
+  const { error } = await supabaseClient.storage.from(bucket).upload(path, file, {
+    contentType: file.type || "audio/webm",
+    upsert: true,
+  });
+
+  if (error) {
+    console.warn("upload audio failed", error);
+    return undefined;
+  }
+
+  const { data } = supabaseClient.storage.from(bucket).getPublicUrl(path);
+  if (!data?.publicUrl) {
     console.warn("upload audio missing url", data);
     return undefined;
   }
-  return data.url;
+  return data.publicUrl;
 }

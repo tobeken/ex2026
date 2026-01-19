@@ -752,6 +752,7 @@ export default function Session2Page() {
     postTiming([{ event: "session_stop", extra: { searchDurationMs: durationMs } }]);
     taskStartAtRef.current = null;
     stopSessionRef.current?.();
+    setSessionActive(false);
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
@@ -863,6 +864,7 @@ export default function Session2Page() {
           setStage("post");
           toast.warning("5分経過しました。アンケートに進んでください。");
           stopSessionRef.current?.();
+          setSessionActive(false);
           const started = taskStartAtRef.current ?? Date.now() - 5 * 60 * 1000;
           const durationMs = Math.min(5 * 60 * 1000, Date.now() - started);
           postTiming([{ event: "session_stop", extra: { searchDurationMs: durationMs } }]);

@@ -530,6 +530,7 @@ export default function Session1Page() {
     postTiming([{ event: "session_stop", extra: { searchDurationMs: durationMs } }]);
     taskStartAtRef.current = null;
     stopSessionRef.current?.();
+    setSessionActive(false);
     stopFullRecordingAndUpload();
     setStage("post");
     // このタスクのポストアンケから再開できるように保持（完了送信時に次タスクへ進める）
@@ -619,6 +620,7 @@ export default function Session1Page() {
             setStage("post");
             toast.warning("5分経過したため終了しました。アンケートに進んでください。");
             stopSessionRef.current?.();
+            setSessionActive(false);
             const started = taskStartAtRef.current ?? Date.now() - 5 * 60 * 1000;
             const durationMs = Math.min(5 * 60 * 1000, Date.now() - started);
             postTiming([{ event: "session_stop", extra: { searchDurationMs: durationMs } }]);

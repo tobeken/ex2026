@@ -84,6 +84,8 @@ export default function Session1Page() {
   const PROGRESS_STAGE_KEY = "s1_stage";
   const [turnIndex, setTurnIndex] = useState(0);
   const lastAssistantEndRef = useRef<number | null>(null);
+  const lastAssistantTurnIndexRef = useRef<number | null>(null);
+  const lastAssistantTextRef = useRef<string | null>(null);
   const taskStartAtRef = useRef<number | null>(null);
   const combinedStreamGetterRef = useRef<() => MediaStream | null>(() => null);
   const fullRecorderRef = useRef<ActiveRecorder | null>(null);
@@ -730,7 +732,11 @@ export default function Session1Page() {
                   {
                     event: "assistant_end_to_user_start",
                     timestamp: ts,
-                    extra: { delayMs: ts - lastAssistantEndRef.current },
+                    extra: {
+                      delayMs: ts - lastAssistantEndRef.current,
+                      assistantTurnIndex: lastAssistantTurnIndexRef.current,
+                      assistantText: lastAssistantTextRef.current,
+                    },
                   },
                 ]);
               }
@@ -743,6 +749,8 @@ export default function Session1Page() {
             }}
             onAssistantSpeechEnd={(text, startedAt, endedAt) => {
               lastAssistantEndRef.current = endedAt;
+              lastAssistantTurnIndexRef.current = turnIndex;
+              lastAssistantTextRef.current = text ?? null;
               postTurns([{ role: "assistant", text, startedAt, endedAt }]);
             }}
         />

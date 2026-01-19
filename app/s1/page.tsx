@@ -447,9 +447,7 @@ export default function Session1Page() {
       if (fullRecordingRetryRef.current === null) {
         fullRecordingRetryRef.current = setTimeout(() => {
           fullRecordingRetryRef.current = null;
-          if (sessionActive) {
-            startFullRecording();
-          }
+          startFullRecording();
         }, 500);
       }
       console.warn("full recording start skipped: no combined stream");

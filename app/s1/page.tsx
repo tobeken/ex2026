@@ -89,6 +89,7 @@ export default function Session1Page() {
   const fullRecorderRef = useRef<ActiveRecorder | null>(null);
   const fullStartedAtRef = useRef<number | null>(null);
   const fullRecordingRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stopSessionRef = useRef<(() => void) | null>(null);
   const [fullRecordingActive, setFullRecordingActive] = useState(false);
 
   const orderedTasks = useMemo(() => {
@@ -528,6 +529,8 @@ export default function Session1Page() {
     const durationMs = started ? Math.min(5 * 60 * 1000, Date.now() - started) : 5 * 60 * 1000;
     postTiming([{ event: "session_stop", extra: { searchDurationMs: durationMs } }]);
     taskStartAtRef.current = null;
+    stopSessionRef.current?.();
+    setSessionActive(false);
     stopFullRecordingAndUpload();
     setStage("post");
     // このタスクのポストアンケから再開できるように保持（完了送信時に次タスクへ進める）
@@ -616,6 +619,8 @@ export default function Session1Page() {
             setVoiceCompleted(true);
             setStage("post");
             toast.warning("5分経過したため終了しました。アンケートに進んでください。");
+            stopSessionRef.current?.();
+            setSessionActive(false);
             const started = taskStartAtRef.current ?? Date.now() - 5 * 60 * 1000;
             const durationMs = Math.min(5 * 60 * 1000, Date.now() - started);
             postTiming([{ event: "session_stop", extra: { searchDurationMs: durationMs } }]);
@@ -710,6 +715,9 @@ export default function Session1Page() {
           title={`VoicePanel - ${currentTask.title}`}
           onSessionStateChange={setSessionActive}
           onStart={handleStartSession}
+          onStopSessionReady={(stop) => {
+            stopSessionRef.current = stop;
+          }}
           onStop={() => {
             postTiming([{ event: "session_stop" }]);
           }}

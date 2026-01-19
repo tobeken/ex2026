@@ -11,6 +11,7 @@ type VoicePanelProps = {
   title?: string;
   initialMessages?: HistoryMessage[];
   onSessionStateChange?: (active: boolean) => void;
+  onStopSessionReady?: (stop: () => void) => void;
   onStart?: () => void;
   onStop?: () => void;
   onUserSpeechFinal?: (text: string, startedAt: number, endedAt: number, turnId?: string, audioBlob?: Blob) => void;
@@ -27,6 +28,7 @@ export function VoicePanel({
   title = "Voice Session",
   initialMessages,
   onSessionStateChange,
+  onStopSessionReady,
   onStart,
   onStop,
   onUserSpeechFinal,
@@ -55,6 +57,10 @@ export function VoicePanel({
   useEffect(() => {
     onSessionStateChange?.(isSessionActive);
   }, [isSessionActive, onSessionStateChange]);
+
+  useEffect(() => {
+    onStopSessionReady?.(stopSession);
+  }, [onStopSessionReady, stopSession]);
 
   useEffect(() => {
     if (onCombinedStreamReady) {

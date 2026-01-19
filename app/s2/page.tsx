@@ -124,6 +124,7 @@ export default function Session2Page() {
   const fullRecorderRef = useRef<ActiveRecorder | null>(null);
   const fullStartedAtRef = useRef<number | null>(null);
   const fullRecordingRetryRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stopSessionRef = useRef<(() => void) | null>(null);
   const [fullRecordingActive, setFullRecordingActive] = useState(false);
   const [historyMessages, setHistoryMessages] = useState<HistoryMessage[]>([]);
   const [historyLoading, setHistoryLoading] = useState(false);
@@ -750,6 +751,8 @@ export default function Session2Page() {
     const durationMs = started ? Math.min(5 * 60 * 1000, Date.now() - started) : 5 * 60 * 1000;
     postTiming([{ event: "session_stop", extra: { searchDurationMs: durationMs } }]);
     taskStartAtRef.current = null;
+    stopSessionRef.current?.();
+    setSessionActive(false);
     if (timerRef.current) {
       clearInterval(timerRef.current);
       timerRef.current = null;
@@ -860,6 +863,8 @@ export default function Session2Page() {
           setVoiceCompleted(true);
           setStage("post");
           toast.warning("5分経過しました。アンケートに進んでください。");
+          stopSessionRef.current?.();
+          setSessionActive(false);
           const started = taskStartAtRef.current ?? Date.now() - 5 * 60 * 1000;
           const durationMs = Math.min(5 * 60 * 1000, Date.now() - started);
           postTiming([{ event: "session_stop", extra: { searchDurationMs: durationMs } }]);
@@ -942,6 +947,9 @@ export default function Session2Page() {
         initialMessages={historyMessages}
         onSessionStateChange={setSessionActive}
         onStart={handleStartSession}
+        onStopSessionReady={(stop) => {
+          stopSessionRef.current = stop;
+        }}
         onStop={() => {
           postTiming([{ event: "session_stop" }]);
         }}

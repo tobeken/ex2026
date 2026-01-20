@@ -314,7 +314,16 @@ export default function Session1Page() {
     }
   };
 
-  const postTurns = async (turns: { role: "user" | "assistant"; text?: string; startedAt: number; endedAt: number; audioUrl?: string }[]) => {
+  const postTurns = async (
+    turns: {
+      role: "user" | "assistant";
+      text?: string;
+      startedAt: number;
+      endedAt: number;
+      durationMs?: number;
+      audioUrl?: string;
+    }[]
+  ) => {
     if (!participantId || !currentTask) return;
     try {
       await fetch("/api/conversation/turns", {
@@ -328,6 +337,7 @@ export default function Session1Page() {
             turnIndex: turnIndex + idx,
             role: t.role,
             text: t.text,
+            durationMs: t.durationMs ?? Math.max(0, t.endedAt - t.startedAt),
             startedAt: new Date(t.startedAt).toISOString(),
             endedAt: new Date(t.endedAt).toISOString(),
           }))
@@ -734,6 +744,8 @@ export default function Session1Page() {
                     timestamp: ts,
                     extra: {
                       delayMs: ts - lastAssistantEndRef.current,
+                      assistantEndedAt: lastAssistantEndRef.current,
+                      userStartedAt: ts,
                       assistantTurnIndex: lastAssistantTurnIndexRef.current,
                       assistantText: lastAssistantTextRef.current,
                     },
@@ -742,7 +754,9 @@ export default function Session1Page() {
               }
             }}
             onUserSpeechFinal={(text, startedAt, endedAt) => {
-              postTurns([{ role: "user", text, startedAt, endedAt }]);
+              postTurns([
+                { role: "user", text, startedAt, endedAt, durationMs: endedAt - startedAt },
+              ]);
             }}
             onAssistantSpeechStart={(ts) => {
               // no-op
@@ -751,7 +765,15 @@ export default function Session1Page() {
               lastAssistantEndRef.current = endedAt;
               lastAssistantTurnIndexRef.current = turnIndex;
               lastAssistantTextRef.current = text ?? null;
-              postTurns([{ role: "assistant", text, startedAt, endedAt }]);
+              postTurns([
+                {
+                  role: "assistant",
+                  text,
+                  startedAt,
+                  endedAt,
+                  durationMs: endedAt - startedAt,
+                },
+              ]);
             }}
         />
           <div className="flex justify-end">

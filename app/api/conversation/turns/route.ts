@@ -12,6 +12,7 @@ const turnSchema = z.object({
   role: z.enum(["user", "assistant"]),
   text: z.string().optional(),
   audioUrl: z.string().optional(),
+  durationMs: z.number().int().nonnegative().optional(),
   startedAt: z.string().or(z.date()),
   endedAt: z.string().or(z.date()),
 });
@@ -74,7 +75,10 @@ export async function POST(req: Request) {
       audioUrl: t.audioUrl ?? null,
       startedAt: new Date(t.startedAt),
       endedAt: new Date(t.endedAt),
-      durationMs: new Date(t.endedAt).getTime() - new Date(t.startedAt).getTime(),
+      durationMs:
+        typeof t.durationMs === "number"
+          ? Math.max(0, t.durationMs)
+          : new Date(t.endedAt).getTime() - new Date(t.startedAt).getTime(),
     }));
 
     // 直前のロールを取得し、assistant連続を1クエリとみなしてカウント

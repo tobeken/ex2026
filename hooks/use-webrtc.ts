@@ -95,7 +95,12 @@ export default function useWebRTCAudioSession(
   const [isMicActive, setIsMicActive] = useState(false);
   const micActiveRef = useRef(false);
   const userSpeechStartRef = useRef<number | null>(null);
+  const userSpeechEndRef = useRef<number | null>(null);
   const assistantSpeechStartRef = useRef<number | null>(null);
+  const assistantAudioSpeakingRef = useRef(false);
+  const assistantAudioStartRef = useRef<number | null>(null);
+  const assistantAudioEndRef = useRef<number | null>(null);
+  const assistantSilenceSinceRef = useRef<number | null>(null);
   const assistantTextRef = useRef<string>("");
   const inboundAudioElRef = useRef<HTMLAudioElement | null>(null);
   const assistantStreamRef = useRef<MediaStream | null>(null);
@@ -264,6 +269,7 @@ export default function useWebRTCAudioSession(
          */
         case "input_audio_buffer.speech_stopped": {
           const ts = Date.now();
+          userSpeechEndRef.current = ts;
           options?.onUserSpeechEnd?.(ts);
           // optional: you could set "stopped" or just keep "speaking"
           updateEphemeralUserMessage({ status: "speaking" });
@@ -299,7 +305,7 @@ export default function useWebRTCAudioSession(
         * Final user transcription
         */
        case "conversation.item.input_audio_transcription.completed": {
-         const endedAt = Date.now();
+         const endedAt = userSpeechEndRef.current ?? Date.now();
          const startedAt = userSpeechStartRef.current ?? endedAt;
           let audioBlob: Blob | null = null;
           if (userRecorderRef.current) {
@@ -319,6 +325,7 @@ export default function useWebRTCAudioSession(
             audioBlob ?? undefined,
           );
           userSpeechStartRef.current = null;
+          userSpeechEndRef.current = null;
           turnIdRef.current = null;
           updateEphemeralUserMessage({
             text: finalText,
@@ -336,7 +343,6 @@ export default function useWebRTCAudioSession(
           const startedAt = assistantSpeechStartRef.current ?? Date.now();
           if (!assistantSpeechStartRef.current) {
             assistantSpeechStartRef.current = startedAt;
-            options?.onAssistantSpeechStart?.(startedAt);
             const turnId = uuidv4();
             turnIdRef.current = turnId;
             const captureable = inboundAudioElRef.current as
@@ -386,9 +392,9 @@ export default function useWebRTCAudioSession(
          * Mark the last assistant message as final
          */
         case "response.audio_transcript.done": {
-          const endedAt = Date.now();
+          const endedAt = assistantAudioEndRef.current ?? Date.now();
           const text = assistantTextRef.current || "";
-          const startedAt = assistantSpeechStartRef.current ?? endedAt;
+          const startedAt = assistantAudioStartRef.current ?? assistantSpeechStartRef.current ?? endedAt;
           let audioBlob: Blob | null = null;
           if (assistantRecorderRef.current) {
             try {
@@ -406,6 +412,8 @@ export default function useWebRTCAudioSession(
             audioBlob ?? undefined,
           );
           assistantSpeechStartRef.current = null;
+          assistantAudioStartRef.current = null;
+          assistantAudioEndRef.current = null;
           assistantTextRef.current = "";
           turnIdRef.current = null;
           setConversation((prev) => {
@@ -577,9 +585,30 @@ export default function useWebRTCAudioSession(
         src.connect(inboundAnalyzer);
         analyserRef.current = inboundAnalyzer;
 
-        // Start volume monitoring
+        // Start volume monitoring + assistant speech activity detection
         volumeIntervalRef.current = window.setInterval(() => {
-          setCurrentVolume(getVolume());
+          const volume = getVolume();
+          setCurrentVolume(volume);
+
+          const threshold = 0.02;
+          const now = Date.now();
+          if (volume >= threshold) {
+            assistantSilenceSinceRef.current = null;
+            if (!assistantAudioSpeakingRef.current) {
+              assistantAudioSpeakingRef.current = true;
+              assistantAudioStartRef.current = now;
+              assistantSpeechStartRef.current = now;
+              options?.onAssistantSpeechStart?.(now);
+            }
+          } else if (assistantAudioSpeakingRef.current) {
+            if (assistantSilenceSinceRef.current === null) {
+              assistantSilenceSinceRef.current = now;
+            } else if (now - assistantSilenceSinceRef.current > 250) {
+              assistantAudioSpeakingRef.current = false;
+              assistantAudioEndRef.current = now;
+              assistantSilenceSinceRef.current = null;
+            }
+          }
         }, 100);
       };
 

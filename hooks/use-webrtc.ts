@@ -597,8 +597,6 @@ export default function useWebRTCAudioSession(
             if (!assistantAudioSpeakingRef.current) {
               assistantAudioSpeakingRef.current = true;
               assistantAudioStartRef.current = now;
-              assistantSpeechStartRef.current = now;
-              options?.onAssistantSpeechStart?.(now);
             }
           } else if (assistantAudioSpeakingRef.current) {
             if (assistantSilenceSinceRef.current === null) {

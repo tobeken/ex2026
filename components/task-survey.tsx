@@ -23,9 +23,9 @@ type Question = {
 };
 
 const defaultQuestions: Question[] = [
-  { id: "interest", text: "Q. このトピックに興味があると思いますか？" },
-  { id: "familiar", text: "Q. このトピックに自分が詳しいと思いますか？" },
-  { id: "difficulty", text: "Q. このトピックに関する情報を調べることは難しそうだと思いますか？" },
+  { id: "interest", text: "Q. あなたはこのトピックについて興味があると思いますか？" },
+  { id: "familiar", text: "Q. あなたはこのトピックについて詳しいと思いますか？" },
+  { id: "difficulty", text: "Q. あなたはこのトピックについて情報を調べることは難しそうだと思いますか？" },
 ];
 
 type TaskSurveyProps = {

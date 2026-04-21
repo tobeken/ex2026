@@ -13,7 +13,6 @@ type VoicePanelProps = {
   onSessionStateChange?: (active: boolean) => void;
   onStopSessionReady?: (stop: () => void) => void;
   onStart?: () => void;
-  onStop?: () => void;
   onUserSpeechFinal?: (text: string, startedAt: number, endedAt: number, turnId?: string, audioBlob?: Blob) => void;
   onUserSpeechStart?: (ts: number) => void;
   onUserSpeechEnd?: (ts: number) => void;
@@ -30,7 +29,6 @@ export function VoicePanel({
   onSessionStateChange,
   onStopSessionReady,
   onStart,
-  onStop,
   onUserSpeechFinal,
   onUserSpeechStart,
   onUserSpeechEnd,
@@ -78,12 +76,6 @@ export function VoicePanel({
     }
   };
 
-  const handleStop = () => {
-    if (!isSessionActive) return;
-    onStop?.();
-    stopSession();
-  };
-
   const statusLabel = status || "Idle";
   const volumeLevel = Math.min(100, Math.round(currentVolume * 2000));
 
@@ -104,13 +96,6 @@ export function VoicePanel({
           </span>
           <Button onClick={handleStart} disabled={!canStart || isSessionActive}>
             対話開始
-          </Button>
-          <Button
-            onClick={handleStop}
-            variant="secondary"
-            disabled={!isSessionActive}
-          >
-            対話中断
           </Button>
         </div>
       </div>

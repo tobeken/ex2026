@@ -60,11 +60,11 @@ export default function SessionsPage() {
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold">Session 選択</h1>
         <p className="text-sm text-muted-foreground">
-          ログイン済みの参加者IDで Session1 / Session2 へ進んでください。
+          ログイン済みの兵庫県立大学のメールアドレスで Session1 / Session2 へ進んでください。
         </p>
         {hasId && (
           <p className="text-xs text-muted-foreground">
-            参加者ID: <span className="font-semibold text-foreground">{participantId}</span>
+            兵庫県立大学のメールアドレス: <span className="font-semibold text-foreground">{participantId}</span>
           </p>
         )}
       </div>

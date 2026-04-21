@@ -26,9 +26,9 @@ const TASK_CATALOG: Record<
       "あなたの知人が来月誕生日を迎えるため、プレゼントを購入したいと考えています。予算、好み、購入場所などを考慮してプレゼントを考えてください。",
   },
   FAREWELL_PARTY: {
-    title: "トピック: 歓送迎会の計画",
+    title: "トピック: 送迎会の計画",
     scenario:
-      "バイト先や研究で一緒だったお世話になっている人が、卒業し、来月から東京で就職することになりました。あなたは、幹事となったので、歓送迎会を考えることになりました。予算、人数、開催場所、時間などを調べ、複数案の歓送迎会の企画を比較しながら、現実的な歓送迎会プランを考えてください。",
+      "あなたの〇〇が、卒業（あるいは転校や異動）することになりました。あなたは、幹事となったので、送迎会を考えることになりました。予算、人数、開催場所、時間などを調べ、複数案の送迎会の企画を比較しながら、現実的な送迎会プランを考えてください。",
   },
   WEEKEND_TRIP: {
     title: "トピック: 休日旅行の計画",
@@ -75,7 +75,11 @@ export default function Session1Page() {
   const [customNotes, setCustomNotes] = useState<string[]>(() => ["", "", ""]);
   const [noteSaved, setNoteSaved] = useState<boolean[]>(() => [false, false, false]);
   const [postAnswers, setPostAnswers] = useState(
-    () => [{ q1: "", q2: "" }, { q1: "", q2: "" }, { q1: "", q2: "" }]
+    () => [
+      { q1: "", q2: "", q3: "", q4: "" },
+      { q1: "", q2: "", q3: "", q4: "" },
+      { q1: "", q2: "", q3: "", q4: "" },
+    ]
   );
   const [postCompleted, setPostCompleted] = useState<boolean[]>(() => [false, false, false]);
   const [progressApplied, setProgressApplied] = useState(false);
@@ -158,7 +162,7 @@ export default function Session1Page() {
     );
     setNoteSaved((prev) => orderedTasks.map((_, idx) => !!prev[idx]));
     setPostAnswers((prev) =>
-      orderedTasks.map((_, idx) => prev[idx] ?? { q1: "", q2: "" })
+      orderedTasks.map((_, idx) => prev[idx] ?? { q1: "", q2: "", q3: "", q4: "" })
     );
     setPostCompleted((prev) => orderedTasks.map((_, idx) => !!prev[idx]));
     setRemainingTime(null);
@@ -237,7 +241,7 @@ export default function Session1Page() {
           if (typeof window !== "undefined") {
             window.sessionStorage.setItem("session1Done", "true");
           }
-          router.replace("/s1/demographics");
+          router.replace("/sessions");
           return;
         }
         setCurrentTaskIndex(nextIdx);
@@ -356,7 +360,7 @@ export default function Session1Page() {
       case "BIRTHDAY_GIFT":
         return "トピック: 送る相手を入力してください。";
       case "FAREWELL_PARTY":
-        return "トピック: お世話になっている人を入力してください。";
+        return "トピック: 〇〇を入力してください。";
       case "WEEKEND_TRIP":
       default:
         return "トピック: 行き先を入力してください。";
@@ -367,7 +371,7 @@ export default function Session1Page() {
       case "BIRTHDAY_GIFT":
         return "例: 祖母 / 同僚 / 友人";
       case "FAREWELL_PARTY":
-        return "例: 部署の先輩 / 担当教授 / 顧客担当";
+        return "例: 先輩 / 担任の先生 / 同僚";
       case "WEEKEND_TRIP":
       default:
         return "例: 京都 / ソウル / 札幌 / 台北";
@@ -381,7 +385,7 @@ export default function Session1Page() {
       return currentTask.scenario.replace("知人", currentNote);
     }
     if (currentTask.taskId === "FAREWELL_PARTY") {
-      return currentTask.scenario.replace("お世話になっている人", currentNote);
+      return currentTask.scenario.replace("〇〇", currentNote);
     }
     if (currentTask.taskId === "WEEKEND_TRIP") {
       let scenario = currentTask.scenario;
@@ -530,7 +534,6 @@ export default function Session1Page() {
   };
 
   const handleTaskComplete = () => {
-    if (sessionActive) return;
     setVoiceCompleted(true);
     if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -561,7 +564,7 @@ export default function Session1Page() {
     toast.success("保存しました");
   };
 
-  const handlePostAnswerChange = (key: "q1" | "q2", value: string) => {
+  const handlePostAnswerChange = (key: "q1" | "q2" | "q3" | "q4", value: string) => {
     const next = [...postAnswers];
     next[currentTaskIndex] = { ...next[currentTaskIndex], [key]: value };
     setPostAnswers(next);
@@ -572,8 +575,8 @@ export default function Session1Page() {
 
   const handlePostSubmit = async () => {
     const answers = postAnswers[currentTaskIndex];
-    if (!answers.q1.trim() || !answers.q2.trim()) {
-      alert("Q1とQ2の両方に回答してください。");
+    if (!answers.q1.trim() || !answers.q2.trim() || !answers.q3 || !answers.q4) {
+      alert("Q1〜Q4のすべてに回答してください。");
       return;
     }
     submitSurvey({
@@ -581,6 +584,8 @@ export default function Session1Page() {
       answers: {
         q1: answers.q1,
         q2: answers.q2,
+        q3: answers.q3,
+        q4: answers.q4,
       },
     });
     const completedNext = [...postCompleted];
@@ -608,7 +613,7 @@ export default function Session1Page() {
         console.warn("failed to mark s1 complete", e);
       }
       toast.success("すべてのタスクが完了しました");
-      router.push("/s1/demographics");
+      router.push("/sessions");
     } else {
       persistStage(currentTaskIndex + 1, "survey");
       handleNextTask(true);
@@ -658,11 +663,11 @@ export default function Session1Page() {
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold">Session 1</h1>
         <p className="text-sm text-muted-foreground">
-        1回目（3タスク連続）。音声再生 → 対話開始/対話中断 → 完了 の流れです。検索時間は5分です。終了後にアンケートに答えてください。
+        1回目（3タスク連続）。サーチヒストリー音声再生 → 対話開始 → 完了 の流れです。検索時間は5分です。終了後にアンケートに答えてください。
         </p>
         {participantId && (
           <p className="text-xs text-muted-foreground">
-            参加者ID: <span className="font-semibold text-foreground">{participantId}</span>
+            兵庫県立大学のメールアドレス: <span className="font-semibold text-foreground">{participantId}</span>
           </p>
         )}
       </div>
@@ -730,9 +735,6 @@ export default function Session1Page() {
           onStopSessionReady={(stop) => {
             stopSessionRef.current = stop;
           }}
-          onStop={() => {
-            postTiming([{ event: "session_stop" }]);
-          }}
           onCombinedStreamReady={(getter) => {
             combinedStreamGetterRef.current = getter;
           }}
@@ -779,12 +781,10 @@ export default function Session1Page() {
           <div className="flex justify-end">
             <Button
               onClick={handleTaskComplete}
-              disabled={sessionActive || voiceCompleted}
+              disabled={voiceCompleted}
               variant="secondary"
             >
-              {currentTaskIndex >= orderedTasks.length - 1
-                ? "タスク完了"
-                : "タスク完了（次へ）"}
+              対話を終了しタスクを完了
             </Button>
           </div>
         </div>
@@ -799,18 +799,58 @@ export default function Session1Page() {
             <Textarea
               value={postAnswers[currentTaskIndex]?.q1 || ""}
               onChange={(e) => handlePostAnswerChange("q1", e.target.value)}
-              placeholder="例: 箇条書きで記載してください"
+              placeholder="箇条書きで記載してください"
+              rows={10}
             />
           </div>
           <div className="space-y-2">
             <p className="text-sm font-semibold">
-              Q2. まだ調べ残っていることや次に調べたいことを箇条書きで書いてください
+              Q2．次回調べるとしたら、何を調べようと思いますか？箇条書きで書いてください。
             </p>
             <Textarea
               value={postAnswers[currentTaskIndex]?.q2 || ""}
               onChange={(e) => handlePostAnswerChange("q2", e.target.value)}
-              placeholder="例: 箇条書きで記載してください"
+              placeholder="箇条書きで記載してください"
+              rows={10}
             />
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-semibold">
+              Q3. 検索中、どんな質問をしようか悩まずに検索ができたと感じましたか？
+            </p>
+            <div className="flex flex-wrap gap-3 text-sm">
+              {["全くそう思わない", "あまりそう思わない", "どちらともいえない", "ややそう思う", "かなりそう思う"].map((label) => (
+                <label key={label} className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name={`s1-post-q3-${currentTaskIndex}`}
+                    value={label}
+                    checked={(postAnswers[currentTaskIndex]?.q3 || "") === label}
+                    onChange={(e) => handlePostAnswerChange("q3", e.target.value)}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-semibold">
+              Q4. 今回の検索で、目的を十分に達成したと感じましたか？
+            </p>
+            <div className="flex flex-wrap gap-3 text-sm">
+              {["全くそう思わない", "あまりそう思わない", "どちらともいえない", "ややそう思う", "かなりそう思う"].map((label) => (
+                <label key={label} className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name={`s1-post-q4-${currentTaskIndex}`}
+                    value={label}
+                    checked={(postAnswers[currentTaskIndex]?.q4 || "") === label}
+                    onChange={(e) => handlePostAnswerChange("q4", e.target.value)}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
           </div>
           <div className="flex justify-end">
             <Button onClick={handlePostSubmit} variant="default">

@@ -21,20 +21,38 @@ import { startRecorder, stopRecorder, type ActiveRecorder } from "@/lib/recorder
 
 type TaskId = "BIRTHDAY_GIFT" | "FAREWELL_PARTY" | "WEEKEND_TRIP";
 type GroupId = "G1" | "G2" | "G3" | "G4" | "G5" | "G6" | "G7" | "G8" | "G9";
+
+type PlaybackReady = {
+  url: string;
+  taskId: TaskId;
+  condition: string;
+};
 const createPostAnswer = () => ({
   q1: "",
-  q2: 0,
-  q3: 0,
+  q21: "",
+  q22: "",
+  q31: "",
+  q32: "",
   q4: "",
-  q5: {
-    mental: 0,
-    physical: 0,
-    temporal: 0,
-    performance: 0,
-    effort: 0,
-    frustration: 0,
-  },
-  q6: {} as Record<string, string>, // pairwise weighting selection
+});
+
+const followupLikertOptions = [
+  "全くそう思わない",
+  "あまりそう思わない",
+  "どちらともいえない",
+  "ややそう思う",
+  "かなりそう思う",
+] as const;
+
+const createFollowupAnswer = () => ({
+  q11: "",
+  q12: "",
+  q21: "",
+  q22: "",
+  q31: "",
+  q32: "",
+  q41: "",
+  q42: "",
 });
 
 const TASK_CATALOG: Record<
@@ -47,9 +65,9 @@ const TASK_CATALOG: Record<
       "あなたの知人が来月誕生日を迎えるため、プレゼントを購入したいと考えています。予算、好み、購入場所などを考慮してプレゼントを考えてください。",
   },
   FAREWELL_PARTY: {
-    title: "トピック: 歓送迎会の計画",
+    title: "トピック: 送迎会の計画",
     scenario:
-      "バイト先や研究で一緒だったお世話になっている人が、卒業し、来月から東京で就職することになりました。あなたは、幹事となったので、歓送迎会を考えることになりました。予算、人数、開催場所、時間などを調べ、複数案の歓送迎会の企画を比較しながら、現実的な歓送迎会プランを考えてください。",
+      "あなたの〇〇が、卒業（あるいは転校や異動）することになりました。あなたは、幹事となったので、送迎会を考えることになりました。予算、人数、開催場所、時間などを調べ、複数案の送迎会の企画を比較しながら、現実的な送迎会プランを考えてください。",
   },
   WEEKEND_TRIP: {
     title: "トピック: 休日旅行の計画",
@@ -93,19 +111,21 @@ export default function Session2Page() {
   const [currentTaskIndex, setCurrentTaskIndex] = useState(0);
   const [audioPlaying, setAudioPlaying] = useState(false);
   const [audioFinished, setAudioFinished] = useState(false);
-  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [playbackReady, setPlaybackReady] = useState<PlaybackReady | null>(null);
+  const [playbackLoading, setPlaybackLoading] = useState(false);
   const [sessionActive, setSessionActive] = useState(false);
   const [voiceCompleted, setVoiceCompleted] = useState(false);
   const [customNotes, setCustomNotes] = useState<string[]>(() => ["", "", ""]);
-  const [followupPrevNotes, setFollowupPrevNotes] = useState<string[]>(() => ["", "", ""]);
-  const [followupNextNotes, setFollowupNextNotes] = useState<string[]>(() => ["", "", ""]);
+  const [followupAnswers, setFollowupAnswers] = useState(
+    () => [createFollowupAnswer(), createFollowupAnswer(), createFollowupAnswer()]
+  );
   const [isFollowupOpen, setIsFollowupOpen] = useState(false);
-  const [followupDraftPrev, setFollowupDraftPrev] = useState("");
-  const [followupDraftNext, setFollowupDraftNext] = useState("");
+  const [followupDraft, setFollowupDraft] = useState(createFollowupAnswer());
   const [stage, setStage] = useState<"voice" | "post">("voice");
   const [remainingTime, setRemainingTime] = useState<number | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const playbackFetchSeqRef = useRef(0);
   const [postAnswers, setPostAnswers] = useState(
     () => [createPostAnswer(), createPostAnswer(), createPostAnswer()]
   );
@@ -276,12 +296,9 @@ export default function Session2Page() {
     setCustomNotes((prev) =>
       orderedTasks.map((_, idx) => (typeof prev[idx] === "string" ? prev[idx] : ""))
     );
-      setFollowupPrevNotes((prev) =>
-        orderedTasks.map((_, idx) => (typeof prev[idx] === "string" ? prev[idx] : ""))
-      );
-      setFollowupNextNotes((prev) =>
-        orderedTasks.map((_, idx) => (typeof prev[idx] === "string" ? prev[idx] : ""))
-      );
+    setFollowupAnswers((prev) =>
+      orderedTasks.map((_, idx) => prev[idx] || createFollowupAnswer())
+    );
       setPostAnswers((prev) =>
         orderedTasks.map(
         (_, idx) =>
@@ -528,36 +545,71 @@ export default function Session2Page() {
   };
 
   useEffect(() => {
+    if (!participantId || !currentTask) return;
+
+    const seq = ++playbackFetchSeqRef.current;
+    const ac = new AbortController();
+    const taskId = currentTask.taskId;
+    const condition = currentTask.condition;
+
+    setPlaybackReady(null);
+    setPlaybackLoading(true);
+    setAudioFinished(false);
+    setAudioPlaying(false);
+
+    try {
+      const el = audioRef.current;
+      if (el) {
+        el.pause();
+        el.removeAttribute("src");
+        el.load();
+      }
+    } catch {
+      // ignore
+    }
+
     const fetchAudio = async () => {
-      if (!participantId || !currentTask) return;
       const modalOpenTs = Date.now();
       postTiming([{ event: "play_audio_modal_open", timestamp: modalOpenTs }]);
       try {
         const res = await fetch(
           `/api/playback-assets?participantId=${encodeURIComponent(
             participantId
-          )}&taskId=${encodeURIComponent(currentTask.taskId)}&conditionId=${encodeURIComponent(
-            currentTask.condition
-          )}`
+          )}&taskId=${encodeURIComponent(taskId)}&conditionId=${encodeURIComponent(condition)}`,
+          { signal: ac.signal }
         );
+        if (seq !== playbackFetchSeqRef.current) return;
         if (!res.ok) {
-          setAudioUrl(null);
+          setPlaybackReady(null);
           return;
         }
         const data = await res.json().catch(() => null);
-        if (data?.audioUrl) {
-          setAudioUrl(data.audioUrl as string);
+        if (seq !== playbackFetchSeqRef.current) return;
+        if (data?.audioUrl && typeof data.audioUrl === "string") {
+          setPlaybackReady({
+            url: data.audioUrl,
+            taskId,
+            condition,
+          });
         } else {
-          setAudioUrl(null);
+          setPlaybackReady(null);
         }
-      } catch (e) {
+      } catch (e: unknown) {
+        if (e instanceof Error && e.name === "AbortError") return;
         console.warn("failed to load playback asset", e);
-        setAudioUrl(null);
+        if (seq !== playbackFetchSeqRef.current) return;
+        setPlaybackReady(null);
+      } finally {
+        if (seq === playbackFetchSeqRef.current) {
+          setPlaybackLoading(false);
+        }
       }
     };
-    fetchAudio();
-    setAudioFinished(false);
-    setAudioPlaying(false);
+    void fetchAudio();
+
+    return () => {
+      ac.abort();
+    };
   }, [participantId, currentTask?.taskId, currentTask?.condition]);
 
   const currentNote = customNotes[currentTaskIndex] || "";
@@ -566,7 +618,7 @@ export default function Session2Page() {
       case "BIRTHDAY_GIFT":
         return "トピック: 送る相手を入力してください。";
       case "FAREWELL_PARTY":
-        return "トピック: お世話になっている人を入力してください。";
+        return "トピック: 〇〇を入力してください。";
       case "WEEKEND_TRIP":
       default:
         return "トピック: 行き先を入力してください。";
@@ -577,7 +629,7 @@ export default function Session2Page() {
       case "BIRTHDAY_GIFT":
         return "例: 祖母 / 同僚 / 友人";
       case "FAREWELL_PARTY":
-        return "例: 部署の先輩 / 担当教授";
+        return "例: 先輩 / 担任の先生 / 同僚";
       case "WEEKEND_TRIP":
       default:
         return "例: 京都 / ソウル / 札幌";
@@ -590,7 +642,7 @@ export default function Session2Page() {
       return currentTask.scenario.replace("知人", currentNote);
     }
     if (currentTask.taskId === "FAREWELL_PARTY") {
-      return currentTask.scenario.replace("お世話になっている人", currentNote);
+      return currentTask.scenario.replace("〇〇", currentNote);
     }
     if (currentTask.taskId === "WEEKEND_TRIP") {
       let scenario = currentTask.scenario;
@@ -610,69 +662,6 @@ export default function Session2Page() {
     !audioPlaying &&
     !historyLoading &&
     (remainingTime === null || remainingTime > 0);
-
-  const tlxDimensions = [
-    {
-      key: "mental",
-      label: "知的・知覚的要求",
-      desc: "どの程度の知的・知覚的活動（考える、決める、計算する、記憶する、見るなど）を必要としましたか。課題はやさしかったですか難しかったですか、単純でしたか複雑でしたか、正確さが求められましたか大ざっぱでよかったですか。",
-      minLabel: "小さい",
-      maxLabel: "大きい",
-    },
-    {
-      key: "physical",
-      label: "身体的要求",
-      desc: "どの程度の身体的活動（押す、引く、回す、制御する、動き回るなど）を必要としましたか。作業はラクでしたかキツかったですか、ゆっくりできましたかキビキビやらなければなりませんでしたか、休み休みできましたか働きづめでしたか。",
-      minLabel: "小さい",
-      maxLabel: "大きい",
-    },
-    {
-      key: "temporal",
-      label: "タイムプレッシャー",
-      desc: "仕事のペースや課題が発生する頻度のために感じる時間的切迫感はどの程度でしたか。ペースはゆっくりとして余裕があるものでしたか、それとも速くて余裕のないものでしたか。",
-      minLabel: "弱い",
-      maxLabel: "強い",
-    },
-    {
-      key: "performance",
-      label: "作業成績",
-      desc: "作業指示者（またはあなた自身）によって設定された課題の目標をどの程度達成できたと思いますか。目標の達成に関して自分の作業成績にどの程度満足していますか。",
-      minLabel: "良い",
-      maxLabel: "悪い",
-    },
-    {
-      key: "effort",
-      label: "努力",
-      desc: "作業成績のレベルを達成・維持するために、精神的・身体的にどの程度一生懸命に作業しなければなりませんでしたか。",
-      minLabel: "少ない",
-      maxLabel: "多い",
-    },
-    {
-      key: "frustration",
-      label: "フラストレーション",
-      desc: "作業中に不安感、落胆、いらいら、ストレス、悩みをどの程度感じましたか。（不安感、落胆、いらいら、ストレスなどを感じる場合は高い）",
-      minLabel: "低い",
-      maxLabel: "高い",
-    },
-  ] as const;
-
-  const tlxPairs = [
-    ["mental", "frustration"],
-    ["effort", "performance"],
-    ["performance", "frustration"],
-    ["temporal", "performance"],
-    ["effort", "physical"],
-    ["mental", "physical"],
-    ["performance", "physical"],
-    ["effort", "temporal"],
-    ["mental", "effort"],
-    ["effort", "frustration"],
-    ["temporal", "physical"],
-    ["mental", "temporal"],
-    ["frustration", "physical"],
-    ["mental", "performance"],
-    ["temporal", "frustration"],
-  ] as const;
 
   const submitSurvey = async (payload: {
     stage: "post" | "followup";
@@ -702,8 +691,18 @@ export default function Session2Page() {
   };
 
   const handlePlayAudio = async () => {
-    if (!audioUrl) {
-      alert("音声が設定されていません。");
+    if (!currentTask) return;
+    const asset = playbackReady;
+    if (
+      !asset ||
+      asset.taskId !== currentTask.taskId ||
+      asset.condition !== currentTask.condition
+    ) {
+      if (playbackLoading) {
+        toast.info("音声を読み込み中です。しばらくお待ちください。");
+      } else {
+        alert("音声が設定されていません。少し待ってから再度お試しください。");
+      }
       return;
     }
     const startTs = Date.now();
@@ -717,13 +716,15 @@ export default function Session2Page() {
           postTiming([{ event: "play_audio_ended", timestamp: Date.now() }]);
         });
       }
-      audioRef.current.src = audioUrl;
+      const el = audioRef.current;
+      el.pause();
+      el.src = asset.url;
+      el.load();
       setAudioFinished(false);
       setIsFollowupOpen(false);
-      setFollowupDraftPrev(followupPrevNotes[currentTaskIndex] || "");
-      setFollowupDraftNext(followupNextNotes[currentTaskIndex] || "");
+      setFollowupDraft(followupAnswers[currentTaskIndex] || createFollowupAnswer());
       setAudioPlaying(true);
-      await audioRef.current.play();
+      await el.play();
       postTiming([{ event: "play_audio_started", timestamp: startTs }]);
     } catch (e) {
       console.error("audio play failed", e);
@@ -737,6 +738,19 @@ export default function Session2Page() {
     if (currentTaskIndex >= orderedTasks.length - 1) return;
     if (stage === "voice" && !voiceCompleted && !force) return;
     if (stage === "post" && !postCompleted[currentTaskIndex] && !force) return;
+    playbackFetchSeqRef.current += 1;
+    setPlaybackReady(null);
+    setPlaybackLoading(false);
+    try {
+      const el = audioRef.current;
+      if (el) {
+        el.pause();
+        el.removeAttribute("src");
+        el.load();
+      }
+    } catch {
+      // ignore
+    }
     setCurrentTaskIndex((idx) => idx + 1);
     setAudioPlaying(false);
     setAudioFinished(false);
@@ -754,7 +768,6 @@ export default function Session2Page() {
   };
 
   const handleTaskComplete = () => {
-    if (sessionActive) return;
     setVoiceCompleted(true);
     setStage("post");
     // このタスクのポストアンケから再開できるように保持（完了送信時に次タスクへ進める）
@@ -774,45 +787,42 @@ export default function Session2Page() {
   };
 
   const handleFollowupSave = () => {
-    if (!followupDraftPrev.trim() || !followupDraftNext.trim()) {
-      alert("両方の内容を入力してください。");
+    if (
+      !followupDraft.q11.trim() ||
+      !followupDraft.q12 ||
+      !followupDraft.q21 ||
+      !followupDraft.q22 ||
+      !followupDraft.q31.trim() ||
+      !followupDraft.q32 ||
+      !followupDraft.q41.trim() ||
+      !followupDraft.q42
+    ) {
+      alert("すべての項目に回答してください。");
       return;
     }
-    const prevArr = [...followupPrevNotes];
-    prevArr[currentTaskIndex] = followupDraftPrev;
-    setFollowupPrevNotes(prevArr);
-    const nextArr = [...followupNextNotes];
-    nextArr[currentTaskIndex] = followupDraftNext;
-    setFollowupNextNotes(nextArr);
+    const nextAnswers = [...followupAnswers];
+    nextAnswers[currentTaskIndex] = { ...followupDraft };
+    setFollowupAnswers(nextAnswers);
     submitSurvey({
       stage: "followup",
-      answers: { learned: followupDraftPrev, followup: followupDraftNext },
+      answers: followupDraft,
     });
     const savedAt = Date.now();
     modalSavedAtRef.current = savedAt;
     postTiming([{ event: "play_audio_modal_saved", timestamp: savedAt }]);
-    setFollowupDraftPrev("");
-    setFollowupDraftNext("");
+    setFollowupDraft(createFollowupAnswer());
     setIsFollowupOpen(false);
   };
 
   const handlePostAnswerChange = (
-    key: "q1" | "q2" | "q3" | "q4" | "q5",
-    value: string,
-    tlxKey?: keyof (typeof postAnswers)[number]["q5"],
+    key: "q1" | "q21" | "q22" | "q31" | "q32" | "q4",
+    value: string
   ) => {
     const next = [...postAnswers];
-    if (key === "q5" && tlxKey) {
-      next[currentTaskIndex] = {
-        ...next[currentTaskIndex],
-        q5: { ...next[currentTaskIndex].q5, [tlxKey]: Number(value) },
-      };
-    } else {
-      next[currentTaskIndex] = {
-        ...next[currentTaskIndex],
-        [key]: key === "q1" || key === "q4" ? value : Number(value),
-      };
-    }
+    next[currentTaskIndex] = {
+      ...next[currentTaskIndex],
+      [key]: value,
+    };
     setPostAnswers(next);
     const completedNext = [...postCompleted];
     completedNext[currentTaskIndex] = false;
@@ -821,15 +831,14 @@ export default function Session2Page() {
 
   const handlePostSubmit = () => {
     const ans = postAnswers[currentTaskIndex];
-    const tlxValues = Object.values(ans.q5);
-    const tlxFilled = tlxValues.every((v) => v > 0);
-    const pairFilled = tlxPairs.every(
-      ([a, b]) =>
-        ans.q6 &&
-        typeof ans.q6[`${a}|${b}`] === "string" &&
-        (ans.q6[`${a}|${b}`] === a || ans.q6[`${a}|${b}`] === b)
-    );
-    if (!ans.q1.trim() || !ans.q4.trim() || ans.q2 <= 0 || ans.q3 <= 0 || !tlxFilled || !pairFilled) {
+    if (
+      !ans.q1.trim() ||
+      !ans.q21 ||
+      !ans.q22.trim() ||
+      !ans.q31 ||
+      !ans.q32.trim() ||
+      !ans.q4.trim()
+    ) {
       alert("すべての項目に回答してください。");
       return;
     }
@@ -905,11 +914,11 @@ export default function Session2Page() {
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold">Session 2</h1>
         <p className="text-sm text-muted-foreground">
-          2回目（3タスク連続）。音声再生 → 対話開始/対話中断 → 完了 の流れです。検索時間は5分です。終了後にアンケートに答えてください。
+          2回目（3タスク連続）。サーチヒストリー音声再生 → 対話開始 → 完了 の流れです。検索時間は5分です。終了後にアンケートに答えてください。
         </p>
         {participantId && (
           <p className="text-xs text-muted-foreground">
-            参加者ID: <span className="font-semibold text-foreground">{participantId}</span>
+            兵庫県立大学のメールアドレス: <span className="font-semibold text-foreground">{participantId}</span>
           </p>
         )}
       </div>
@@ -930,8 +939,15 @@ export default function Session2Page() {
             </p>
           </div>
           {stage === "voice" && (
-            <Button onClick={handlePlayAudio} disabled={audioPlaying}>
-              {audioPlaying ? "再生中..." : "音声再生"}
+            <Button
+              onClick={handlePlayAudio}
+              disabled={audioPlaying || playbackLoading || !playbackReady}
+            >
+              {audioPlaying
+                ? "再生中..."
+                : playbackLoading
+                  ? "読み込み中..."
+                  : "サーチヒストリー音声再生"}
             </Button>
           )}
         </div>
@@ -940,7 +956,7 @@ export default function Session2Page() {
             {stage === "voice"
               ? audioFinished
                 ? "対話開始 で検索を開始できます。"
-                : "音声再生 を実行してください。"
+                : "サーチヒストリー音声再生 を実行してください。"
               : "アンケートに回答してください。"}
           </span>
           {stage === "voice" && remainingTime !== null && (
@@ -961,9 +977,6 @@ export default function Session2Page() {
         onStart={handleStartSession}
         onStopSessionReady={(stop) => {
           stopSessionRef.current = stop;
-        }}
-        onStop={() => {
-          postTiming([{ event: "session_stop" }]);
         }}
         onUserSpeechStart={(ts) => {
           if (lastAssistantEndRef.current) {
@@ -1011,12 +1024,10 @@ export default function Session2Page() {
           <div className="flex justify-end">
             <Button
               onClick={handleTaskComplete}
-              disabled={sessionActive || voiceCompleted}
+              disabled={voiceCompleted}
               variant="secondary"
             >
-              {currentTaskIndex >= orderedTasks.length - 1
-                ? "タスク完了"
-                : "タスク完了（次へ）"}
+              対話を終了しタスクを完了
             </Button>
           </div>
         </>
@@ -1024,177 +1035,88 @@ export default function Session2Page() {
 
       {stage === "post" && (
         <Card className="p-4 space-y-4">
-          <p className="text-sm font-semibold">
-            Q1. 今回の検索で、新たに調べて分かったことや決まったことを箇条書きで書いてください
-          </p>
-          <Textarea
-            value={postAnswers[currentTaskIndex]?.q1 || ""}
-            onChange={(e) => handlePostAnswerChange("q1", e.target.value)}
-            placeholder="箇条書きで記入してください"
-            className="min-h-[120px]"
-          />
+          <p className="text-sm font-medium">タスク終了アンケート</p>
           <div className="space-y-2">
             <p className="text-sm font-semibold">
-              Q2. 検索前に聞いたシステムの音声は前回調べたことを思い出すのに役立ちましたか？
+              Q1. 1回目と2回目の検索を踏まえて、最終的にどのような計画を立てましたか？できるだけ具体的に書いてください。（自由記述）
+            </p>
+            <Textarea
+              value={postAnswers[currentTaskIndex]?.q1 || ""}
+              onChange={(e) => handlePostAnswerChange("q1", e.target.value)}
+              placeholder="自由記述"
+              rows={10}
+            />
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-semibold">
+              Q2-1. 今回の検索中（2回目）、どんな質問をしようか悩まずに検索ができたと感じましたか？
             </p>
             <div className="flex flex-wrap gap-3 text-sm">
-              {[1, 2, 3, 4, 5].map((n) => {
-                const labels = ["全く当てはまらない", "あまり当てはまらない", "どちらでもない", "よく当てはまる", "とてもよく当てはまる"];
-                return (
-                  <label key={n} className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      name={`q2-${currentTaskIndex}`}
-                      value={n}
-                      checked={(postAnswers[currentTaskIndex]?.q2 || 0) === n}
-                      onChange={(e) => handlePostAnswerChange("q2", e.target.value)}
-                    />
-                    {labels[n - 1]}
-                  </label>
-                );
-              })}
+              {["全くそう思わない", "あまりそう思わない", "どちらともいえない", "ややそう思う", "かなりそう思う"].map((label) => (
+                <label key={label} className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name={`s2-post-q21-${currentTaskIndex}`}
+                    value={label}
+                    checked={(postAnswers[currentTaskIndex]?.q21 || "") === label}
+                    onChange={(e) => handlePostAnswerChange("q21", e.target.value)}
+                  />
+                  {label}
+                </label>
+              ))}
             </div>
           </div>
           <div className="space-y-2">
             <p className="text-sm font-semibold">
-              Q3. 検索前に聞いたシステムの音声は、検索を再開し、最初の検索を行う際に役立ちましたか？
+              Q2-2. Q2-1の理由を教えてください。（自由記述）
+            </p>
+            <Textarea
+              value={postAnswers[currentTaskIndex]?.q22 || ""}
+              onChange={(e) => handlePostAnswerChange("q22", e.target.value)}
+              placeholder="自由記述"
+              rows={10}
+            />
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-semibold">
+              Q3-1. 今回の検索（2回目の検索）で、目的を十分に達成したと感じましたか？
             </p>
             <div className="flex flex-wrap gap-3 text-sm">
-              {[1, 2, 3, 4, 5].map((n) => {
-                const labels = ["全く当てはまらない", "あまり当てはまらない", "どちらでもない", "よく当てはまる", "とてもよく当てはまる"];
-                return (
-                  <label key={n} className="flex items-center gap-2">
-                    <input
-                      type="radio"
-                      name={`q3-${currentTaskIndex}`}
-                      value={n}
-                      checked={(postAnswers[currentTaskIndex]?.q3 || 0) === n}
-                      onChange={(e) => handlePostAnswerChange("q3", e.target.value)}
-                    />
-                    {labels[n - 1]}
-                  </label>
-                );
-              })}
+              {["全くそう思わない", "あまりそう思わない", "どちらともいえない", "ややそう思う", "かなりそう思う"].map((label) => (
+                <label key={label} className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name={`s2-post-q31-${currentTaskIndex}`}
+                    value={label}
+                    checked={(postAnswers[currentTaskIndex]?.q31 || "") === label}
+                    onChange={(e) => handlePostAnswerChange("q31", e.target.value)}
+                  />
+                  {label}
+                </label>
+              ))}
             </div>
           </div>
           <div className="space-y-2">
             <p className="text-sm font-semibold">
-              Q4. 検索前に聞いたシステムの音声について感じたことを自由に記述してください
+              Q3-2. Q3-1の理由を教えてください。（自由記述）
+            </p>
+            <Textarea
+              value={postAnswers[currentTaskIndex]?.q32 || ""}
+              onChange={(e) => handlePostAnswerChange("q32", e.target.value)}
+              placeholder="自由記述"
+              rows={10}
+            />
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-semibold">
+              Q4. 今回の検索でサーチヒストリー音声について感じたことを自由に記述してください。（自由記述）
             </p>
             <Textarea
               value={postAnswers[currentTaskIndex]?.q4 || ""}
               onChange={(e) => handlePostAnswerChange("q4", e.target.value)}
               placeholder="自由記述"
-              className="min-h-[120px]"
+              rows={10}
             />
-          </div>
-          <div className="space-y-4">
-            <p className="text-sm font-semibold">Q5. タスクの経験についてお伺いします</p>
-            <p className="text-xs text-muted-foreground">
-              タスクの経験に最も近い各スケール上のポイントをクリックしてください。
-            </p>
-            {tlxDimensions.map((dim) => (
-              <div key={dim.key} className="space-y-2 rounded-lg border border-border/40 bg-muted/20 p-3">
-                <div className="space-y-1">
-                  <p className="text-sm font-semibold">{dim.label}</p>
-                  <p className="text-xs text-red-500 leading-5">{dim.desc}</p>
-                </div>
-                <div className="space-y-2">
-                  <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>{dim.minLabel}</span>
-                    <span>{dim.maxLabel}</span>
-                  </div>
-                  <div
-                    className="grid gap-0.5 border border-border/60 rounded-sm p-1 bg-background"
-                    style={{ gridTemplateColumns: "repeat(20, minmax(0, 1fr))" }}
-                  >
-                    {Array.from({ length: 20 }, (_, idx) => {
-                      const value = idx + 1;
-                      const current = postAnswers[currentTaskIndex]?.q5?.[dim.key] || 0;
-                      return (
-                        <label
-                          key={`${dim.key}-${value}`}
-                          className={`h-6 w-full border border-border/50 cursor-pointer transition ${
-                            current === value ? "bg-primary/70" : "bg-background"
-                          }`}
-                        >
-                          <input
-                            type="radio"
-                            name={`tlx-${dim.key}-${currentTaskIndex}`}
-                            value={value}
-                            checked={current === value}
-                            onChange={(e) => handlePostAnswerChange("q5", e.target.value, dim.key)}
-                            className="sr-only"
-                          />
-                        </label>
-                      );
-                    })}
-                  </div>
-                  <p className="text-xs text-muted-foreground">現在の値: {postAnswers[currentTaskIndex]?.q5?.[dim.key] || 0}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-          <div className="space-y-3">
-            <p className="text-sm font-semibold">
-              Q6. 2つの項目を比較し、より負荷に影響すると感じた項目を選んでください
-            </p>
-            <p className="text-xs text-muted-foreground">
-              各ペアで一方を選択してください。
-            </p>
-            <div className="space-y-2">
-              {tlxPairs.map(([a, b]) => {
-                const pairKey = `${a}|${b}`;
-                const current = postAnswers[currentTaskIndex]?.q6?.[pairKey] || "";
-                return (
-                  <div key={pairKey} className="flex items-center gap-4 text-sm">
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name={pairKey}
-                        value={a}
-                        checked={current === a}
-                        onChange={(e) => {
-                          const next = [...postAnswers];
-                          const currentAns = next[currentTaskIndex];
-                          next[currentTaskIndex] = {
-                            ...currentAns,
-                            q6: { ...currentAns.q6, [pairKey]: e.target.value },
-                          };
-                          setPostAnswers(next);
-                          const completedNext = [...postCompleted];
-                          completedNext[currentTaskIndex] = false;
-                          setPostCompleted(completedNext);
-                        }}
-                      />
-                      {tlxDimensions.find((d) => d.key === a)?.label}
-                    </label>
-                    <span className="text-muted-foreground">or</span>
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="radio"
-                        name={pairKey}
-                        value={b}
-                        checked={current === b}
-                        onChange={(e) => {
-                          const next = [...postAnswers];
-                          const currentAns = next[currentTaskIndex];
-                          next[currentTaskIndex] = {
-                            ...currentAns,
-                            q6: { ...currentAns.q6, [pairKey]: e.target.value },
-                          };
-                          setPostAnswers(next);
-                          const completedNext = [...postCompleted];
-                          completedNext[currentTaskIndex] = false;
-                          setPostCompleted(completedNext);
-                        }}
-                      />
-                      {tlxDimensions.find((d) => d.key === b)?.label}
-                    </label>
-                  </div>
-                );
-              })}
-            </div>
           </div>
           <div className="flex justify-end">
             <Button onClick={handlePostSubmit}>
@@ -1206,32 +1128,163 @@ export default function Session2Page() {
         </Card>
       )}
 
-      <Dialog open={isFollowupOpen} onOpenChange={setIsFollowupOpen}>
-        <DialogContent>
+      <Dialog
+        open={isFollowupOpen}
+        onOpenChange={(open) => {
+          if (open) setIsFollowupOpen(true);
+        }}
+      >
+        <DialogContent
+          className="w-[95vw] max-w-4xl max-h-[85vh] overflow-y-auto [&>button]:hidden"
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
           <DialogHeader>
             <DialogTitle>以下について記載ください</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
             <p className="text-sm font-semibold">
-              前回の検索を思い出して、調べて分かったことや決まったことを箇条書きで書いてください（覚えていない場合は「覚えていない」と記述してください）
+              Q1-1. 前回の検索で調べたこと/決まったことを思い出して箇条書きで書いてください（覚えていない場合は覚えていないと記載ください）
             </p>
             <Textarea
-              value={followupDraftPrev}
-              onChange={(e) => setFollowupDraftPrev(e.target.value)}
+              value={followupDraft.q11}
+              onChange={(e) =>
+                setFollowupDraft((prev) => ({ ...prev, q11: e.target.value }))
+              }
               placeholder="箇条書きで入力してください"
-              className="min-h-[120px]"
+              rows={10}
             />
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-semibold">
+              Q1-2. サーチヒストリー音声は前回の検索で調べたこと/決まったことを思い出すのに役に立ちましたか？
+            </p>
+            <div className="flex flex-wrap gap-3 text-sm">
+              {followupLikertOptions.map((label) => (
+                <label key={label} className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name={`followup-q12-${currentTaskIndex}`}
+                    value={label}
+                    checked={followupDraft.q12 === label}
+                    onChange={(e) =>
+                      setFollowupDraft((prev) => ({ ...prev, q12: e.target.value }))
+                    }
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-semibold">
+              Q2-1. サーチヒストリー音声を理解するのは容易であると感じましたか？
+            </p>
+            <div className="flex flex-wrap gap-3 text-sm">
+              {followupLikertOptions.map((label) => (
+                <label key={label} className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name={`followup-q21-${currentTaskIndex}`}
+                    value={label}
+                    checked={followupDraft.q21 === label}
+                    onChange={(e) =>
+                      setFollowupDraft((prev) => ({ ...prev, q21: e.target.value }))
+                    }
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-semibold">
+              Q2-2. サーチヒストリー音声の長さは適切だと感じましたか？
+            </p>
+            <div className="flex flex-wrap gap-3 text-sm">
+              {followupLikertOptions.map((label) => (
+                <label key={label} className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name={`followup-q22-${currentTaskIndex}`}
+                    value={label}
+                    checked={followupDraft.q22 === label}
+                    onChange={(e) =>
+                      setFollowupDraft((prev) => ({ ...prev, q22: e.target.value }))
+                    }
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
           </div>
           <div className="space-y-3 pt-2">
             <p className="text-sm font-semibold">
-              前回の検索を思い出して、調べ残っていることや次に調べたいことを箇条書きで書いてください（覚えていない場合は「覚えていない」と記述してください）
+              Q3-1. 前回の検索で次に調べようと思っていたことを思い出して箇条書きで書いてください（覚えていない場合は覚えていないと記載ください）
             </p>
             <Textarea
-              value={followupDraftNext}
-              onChange={(e) => setFollowupDraftNext(e.target.value)}
+              value={followupDraft.q31}
+              onChange={(e) =>
+                setFollowupDraft((prev) => ({ ...prev, q31: e.target.value }))
+              }
               placeholder="箇条書きで入力してください"
-              className="min-h-[120px]"
+              rows={10}
             />
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-semibold">
+              Q3-2. サーチヒストリー音声は前回の検索で次に調べようとしていた内容を思い出すのに役に立ちましたか？
+            </p>
+            <div className="flex flex-wrap gap-3 text-sm">
+              {followupLikertOptions.map((label) => (
+                <label key={label} className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name={`followup-q32-${currentTaskIndex}`}
+                    value={label}
+                    checked={followupDraft.q32 === label}
+                    onChange={(e) =>
+                      setFollowupDraft((prev) => ({ ...prev, q32: e.target.value }))
+                    }
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-3 pt-2">
+            <p className="text-sm font-semibold">
+              Q4-1. 次に調べようと思いついたことがあれば箇条書きで書いてください（Q3-1と同じ内容であっても良い）
+            </p>
+            <Textarea
+              value={followupDraft.q41}
+              onChange={(e) =>
+                setFollowupDraft((prev) => ({ ...prev, q41: e.target.value }))
+              }
+              placeholder="箇条書きで入力してください"
+              rows={10}
+            />
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-semibold">
+              Q4-2. サーチヒストリー音声は次に調べることを思いつくのに役立ちましたか？
+            </p>
+            <div className="flex flex-wrap gap-3 text-sm">
+              {followupLikertOptions.map((label) => (
+                <label key={label} className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name={`followup-q42-${currentTaskIndex}`}
+                    value={label}
+                    checked={followupDraft.q42 === label}
+                    onChange={(e) =>
+                      setFollowupDraft((prev) => ({ ...prev, q42: e.target.value }))
+                    }
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
           </div>
           <DialogFooter className="flex justify-end">
             <Button onClick={handleFollowupSave}>保存</Button>

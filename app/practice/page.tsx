@@ -27,7 +27,7 @@ export default function PracticePage() {
   const [voiceCompleted, setVoiceCompleted] = useState(false);
   const [note, setNote] = useState("");
   const [noteSaved, setNoteSaved] = useState(false);
-  const [postAnswers, setPostAnswers] = useState({ q1: "", q2: "" });
+  const [postAnswers, setPostAnswers] = useState({ q1: "", q2: "", q3: "", q4: "" });
   const [postCompleted, setPostCompleted] = useState(false);
   const [remainingTime, setRemainingTime] = useState<number | null>(null);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
@@ -115,7 +115,6 @@ export default function PracticePage() {
   };
 
   const handleTaskComplete = () => {
-    if (sessionActive) return;
     setVoiceCompleted(true);
     if (timerRef.current) {
       clearInterval(timerRef.current);
@@ -126,8 +125,8 @@ export default function PracticePage() {
   };
 
   const handlePostSubmit = () => {
-    if (!postAnswers.q1.trim() || !postAnswers.q2.trim()) {
-      alert("Q1とQ2に回答してください。");
+    if (!postAnswers.q1.trim() || !postAnswers.q2.trim() || !postAnswers.q3 || !postAnswers.q4) {
+      alert("Q1〜Q4のすべてに回答してください。");
       return;
     }
     submitSurvey({
@@ -135,6 +134,8 @@ export default function PracticePage() {
       answers: {
         q1: postAnswers.q1,
         q2: postAnswers.q2,
+        q3: postAnswers.q3,
+        q4: postAnswers.q4,
       },
     });
     setPostCompleted(true);
@@ -160,7 +161,7 @@ export default function PracticePage() {
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold">練習タスク</h1>
         <p className="text-sm text-muted-foreground">
-        音声再生 → 対話開始/対話中断 → 完了 の流れです。検索時間は5分です。終了後にアンケートに答えてください。
+        サーチヒストリー音声再生 → 対話開始/対話中断 → 完了 の流れです。検索時間は5分です。終了後にアンケートに答えてください。
         </p>
       </div>
 
@@ -224,10 +225,10 @@ export default function PracticePage() {
           <div className="flex justify-end">
             <Button
               onClick={handleTaskComplete}
-              disabled={sessionActive || voiceCompleted}
+              disabled={voiceCompleted}
               variant="secondary"
             >
-              タスク完了
+              対話を終了しタスクを完了
             </Button>
           </div>
         </div>
@@ -244,17 +245,57 @@ export default function PracticePage() {
               value={postAnswers.q1}
               onChange={(e) => setPostAnswers((prev) => ({ ...prev, q1: e.target.value }))}
               placeholder="箇条書きで記載してください"
+              rows={10}
             />
           </div>
           <div className="space-y-2">
             <p className="text-sm font-semibold">
-              Q2. まだ調べ残っていることや次に調べたいことを箇条書きで書いてください
+              Q2．次回調べるとしたら、何を調べようと思いますか？箇条書きで書いてください。
             </p>
             <Textarea
               value={postAnswers.q2}
               onChange={(e) => setPostAnswers((prev) => ({ ...prev, q2: e.target.value }))}
               placeholder="箇条書きで記載してください"
+              rows={10}
             />
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-semibold">
+              Q3. 検索中、どんな質問をしようか悩まずに検索ができたと感じましたか？
+            </p>
+            <div className="flex flex-wrap gap-3 text-sm">
+              {["全くそう思わない", "あまりそう思わない", "どちらともいえない", "ややそう思う", "かなりそう思う"].map((label) => (
+                <label key={label} className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="practice-post-q3"
+                    value={label}
+                    checked={postAnswers.q3 === label}
+                    onChange={(e) => setPostAnswers((prev) => ({ ...prev, q3: e.target.value }))}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <p className="text-sm font-semibold">
+              Q4. 今回の検索で、目的を十分に達成したと感じましたか？
+            </p>
+            <div className="flex flex-wrap gap-3 text-sm">
+              {["全くそう思わない", "あまりそう思わない", "どちらともいえない", "ややそう思う", "かなりそう思う"].map((label) => (
+                <label key={label} className="flex items-center gap-2">
+                  <input
+                    type="radio"
+                    name="practice-post-q4"
+                    value={label}
+                    checked={postAnswers.q4 === label}
+                    onChange={(e) => setPostAnswers((prev) => ({ ...prev, q4: e.target.value }))}
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
           </div>
           <div className="flex justify-end">
             <Button onClick={handlePostSubmit} disabled={postCompleted}>

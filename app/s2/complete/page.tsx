@@ -8,7 +8,7 @@ export default function CompletePage() {
   const handleCopy = async () => {
     try {
       await navigator.clipboard.writeText(applicationNumber);
-      alert("申請番号をコピーしました。");
+      alert("終了コードをコピーしました。");
     } catch (e) {
       alert("コピーできませんでした。手動でコピーしてください。");
     }
@@ -19,12 +19,12 @@ export default function CompletePage() {
       <h1 className="text-2xl font-semibold">完了</h1>
       <div className="space-y-3 text-sm leading-7">
         <p>
-          申請番号は「{applicationNumber}」です．こちらをコピーしたのち，指定場所に貼り付けてください．
+          終了コードは「{applicationNumber}」です．こちらをコピーしたのち，GoogleChatにて担当者に送信してください．
         </p>
-        <p>申請番号をコピーした後に，ログアウトください．</p>
+        <p>終了コードをコピーした後に，ログアウトください．</p>
       </div>
       <div className="flex gap-2">
-        <Button onClick={handleCopy}>申請番号をコピー</Button>
+        <Button onClick={handleCopy}>終了コードをコピー</Button>
         <Button asChild variant="outline">
           <a href="/logout">ログアウトへ</a>
         </Button>

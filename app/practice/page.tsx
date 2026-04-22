@@ -161,7 +161,7 @@ export default function PracticePage() {
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold">練習タスク</h1>
         <p className="text-sm text-muted-foreground">
-        サーチヒストリー音声再生 → 対話開始/対話中断 → 完了 の流れです。検索時間は5分です。終了後にアンケートに答えてください。
+        事前アンケート → 対話開始/対話中断 → 完了 の流れです。検索時間は5分です。終了後にアンケートに答えてください。
         </p>
       </div>
 

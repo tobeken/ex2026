@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect } from "react";
+import { toast } from "sonner";
 import useWebRTCAudioSession, { type HistoryMessage } from "@/hooks/use-webrtc";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -73,6 +74,9 @@ export function VoicePanel({
       await startSession(initialMessages);
     } catch (error) {
       console.error("Failed to start session:", error);
+      toast.error(
+        "対話を開始できませんでした。ブラウザでこのページを再読み込みしたうえで、もう一度「対話開始」をお試しください。"
+      );
     }
   };
 
@@ -102,6 +106,9 @@ export function VoicePanel({
       <div className="text-sm text-muted-foreground">
         Status: <span className="font-medium text-foreground">{statusLabel}</span>
       </div>
+      <p className="text-xs text-muted-foreground leading-relaxed border-t border-border/60 pt-3">
+        「対話開始」を押した直後にうまくつながらない場合は、ページを再読み込みしてから再度お試しください。対話の途中で接続が切れた場合は、以降の実験を続けられないことがあります。
+      </p>
       <div className="space-y-3">
         <div className="space-y-1">
           <p className="text-xs text-muted-foreground">あなたの音声</p>

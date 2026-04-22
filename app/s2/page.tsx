@@ -67,7 +67,7 @@ const TASK_CATALOG: Record<
   FAREWELL_PARTY: {
     title: "トピック: 送迎会の計画",
     scenario:
-      "あなたの〇〇が、卒業（あるいは転校や異動）することになりました。あなたは、幹事となったので、送迎会を考えることになりました。予算、人数、開催場所、時間などを調べ、複数案の送迎会の企画を比較しながら、現実的な送迎会プランを考えてください。",
+      "あなたの知人が、卒業（あるいは転校や異動）することになりました。あなたは、幹事となったので、送迎会を考えることになりました。予算、人数、開催場所、時間などを調べ、複数案の送迎会の企画を比較しながら、現実的な送迎会プランを考えてください。",
   },
   WEEKEND_TRIP: {
     title: "トピック: 休日旅行の計画",
@@ -616,9 +616,9 @@ export default function Session2Page() {
   const notePrompt = (() => {
     switch (currentTask?.taskId) {
       case "BIRTHDAY_GIFT":
-        return "トピック: 送る相手を入力してください。";
+        return "トピック: 誕生日プレゼントを贈る相手を入力してください。。";
       case "FAREWELL_PARTY":
-        return "トピック: 〇〇を入力してください。";
+        return "トピック: 知人を入力してください。";
       case "WEEKEND_TRIP":
       default:
         return "トピック: 行き先を入力してください。";
@@ -642,7 +642,7 @@ export default function Session2Page() {
       return currentTask.scenario.replace("知人", currentNote);
     }
     if (currentTask.taskId === "FAREWELL_PARTY") {
-      return currentTask.scenario.replace("〇〇", currentNote);
+      return currentTask.scenario.replace("知人", currentNote);
     }
     if (currentTask.taskId === "WEEKEND_TRIP") {
       let scenario = currentTask.scenario;

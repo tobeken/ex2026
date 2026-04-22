@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { v4 as uuidv4 } from "uuid";
+import { toast } from "sonner";
 import { Conversation } from "@/lib/conversations";
 import { startRecorder, stopRecorder, type ActiveRecorder } from "@/lib/recorder";
 import { useTranslations } from "@/components/translations-context";
@@ -94,6 +95,7 @@ export default function useWebRTCAudioSession(
   const volumeIntervalRef = useRef<number | null>(null);
   const [isMicActive, setIsMicActive] = useState(false);
   const micActiveRef = useRef(false);
+  const webrtcSessionEstablishedRef = useRef(false);
   const userSpeechStartRef = useRef<number | null>(null);
   const userSpeechEndRef = useRef<number | null>(null);
   const assistantSpeechStartRef = useRef<number | null>(null);
@@ -555,6 +557,16 @@ export default function useWebRTCAudioSession(
       const pc = new RTCPeerConnection();
       peerConnectionRef.current = pc;
 
+      pc.onconnectionstatechange = () => {
+        const state = pc.connectionState;
+        if (state === "failed" && webrtcSessionEstablishedRef.current) {
+          toast.error(
+            "対話の通信が切断されました。このままでは実験を続行できない可能性があります。ページを再読み込みしてください。"
+          );
+          stopSession();
+        }
+      };
+
       // Hidden <audio> element for inbound assistant TTS
       const audioEl = document.createElement("audio");
       audioEl.autoplay = true;
@@ -655,16 +667,23 @@ export default function useWebRTCAudioSession(
         },
       });
 
-      // Set remote description
       const answerSdp = await response.text();
+      if (!response.ok) {
+        throw new Error(
+          `Realtime SDP が拒否されました (${response.status}): ${answerSdp.slice(0, 240)}`
+        );
+      }
       await pc.setRemoteDescription({ type: "answer", sdp: answerSdp });
 
+      webrtcSessionEstablishedRef.current = true;
       setIsSessionActive(true);
       setStatus("対話セッション確立！");
     } catch (err) {
       console.error("startSession error:", err);
       setStatus(`Error: ${err}`);
+      webrtcSessionEstablishedRef.current = false;
       stopSession();
+      throw err;
     }
   }
 
@@ -726,6 +745,7 @@ export default function useWebRTCAudioSession(
 
     ephemeralUserMessageIdRef.current = null;
 
+    webrtcSessionEstablishedRef.current = false;
     setCurrentVolume(0);
     setIsSessionActive(false);
     setStatus("対話セッション停止中");

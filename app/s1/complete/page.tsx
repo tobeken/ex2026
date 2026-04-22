@@ -19,7 +19,7 @@ export default function CompletePage() {
       <h1 className="text-2xl font-semibold">完了</h1>
       <div className="space-y-3 text-sm leading-7">
         <p>
-          終了コードは「{applicationNumber}」です．GoogleChatにて担当者に送信してください．
+          終了コードは「{applicationNumber}」です．こちらをコピーしたのち，GoogleChatにて担当者に送信してください．
         </p>
         <p>終了コードをコピーした後に，ログアウトください．</p>
       </div>

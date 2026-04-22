@@ -28,7 +28,7 @@ const TASK_CATALOG: Record<
   FAREWELL_PARTY: {
     title: "トピック: 送迎会の計画",
     scenario:
-      "あなたの〇〇が、卒業（あるいは転校や異動）することになりました。あなたは、幹事となったので、送迎会を考えることになりました。予算、人数、開催場所、時間などを調べ、複数案の送迎会の企画を比較しながら、現実的な送迎会プランを考えてください。",
+      "あなたの知人が、卒業（あるいは転校や異動）することになりました。あなたは、幹事となったので、送迎会を考えることになりました。予算、人数、開催場所、時間などを調べ、複数案の送迎会の企画を比較しながら、現実的な送迎会プランを考えてください。",
   },
   WEEKEND_TRIP: {
     title: "トピック: 休日旅行の計画",
@@ -193,7 +193,7 @@ export default function Session1Page() {
             if (typeof window !== "undefined") {
               window.sessionStorage.setItem("session1Done", "true");
             }
-            router.replace("/sessions");
+            router.replace("/s1/complete");
             return;
           }
           if (
@@ -241,7 +241,7 @@ export default function Session1Page() {
           if (typeof window !== "undefined") {
             window.sessionStorage.setItem("session1Done", "true");
           }
-          router.replace("/sessions");
+          router.replace("/s1/complete");
           return;
         }
         setCurrentTaskIndex(nextIdx);
@@ -358,9 +358,9 @@ export default function Session1Page() {
   const notePrompt = (() => {
     switch (currentTask?.taskId) {
       case "BIRTHDAY_GIFT":
-        return "トピック: 送る相手を入力してください。";
+        return "トピック: 誕生日プレゼントを贈る相手を入力してください。";
       case "FAREWELL_PARTY":
-        return "トピック: 〇〇を入力してください。";
+        return "トピック: 知人を入力してください。";
       case "WEEKEND_TRIP":
       default:
         return "トピック: 行き先を入力してください。";
@@ -385,7 +385,7 @@ export default function Session1Page() {
       return currentTask.scenario.replace("知人", currentNote);
     }
     if (currentTask.taskId === "FAREWELL_PARTY") {
-      return currentTask.scenario.replace("〇〇", currentNote);
+      return currentTask.scenario.replace("知人", currentNote);
     }
     if (currentTask.taskId === "WEEKEND_TRIP") {
       let scenario = currentTask.scenario;
@@ -613,7 +613,7 @@ export default function Session1Page() {
         console.warn("failed to mark s1 complete", e);
       }
       toast.success("すべてのタスクが完了しました");
-      router.push("/sessions");
+      router.push("/s1/complete");
     } else {
       persistStage(currentTaskIndex + 1, "survey");
       handleNextTask(true);
@@ -663,7 +663,7 @@ export default function Session1Page() {
       <div className="space-y-1">
         <h1 className="text-2xl font-semibold">Session 1</h1>
         <p className="text-sm text-muted-foreground">
-        1回目（3タスク連続）。サーチヒストリー音声再生 → 対話開始 → 完了 の流れです。検索時間は5分です。終了後にアンケートに答えてください。
+        1回目（3タスク連続）。事前アンケート → 対話開始 → 完了 の流れです。検索時間は5分です。終了後にアンケートに答えてください。
         </p>
         {participantId && (
           <p className="text-xs text-muted-foreground">

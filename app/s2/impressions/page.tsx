@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,9 +9,46 @@ import { useRouter } from "next/navigation";
 const ageOptions = ["10代", "20代", "30代", "40代", "50代", "60代以上", "回答を控える"];
 const genderOptions = ["男性", "女性", "その他", "答えたくない"];
 
+type TaskId = "BIRTHDAY_GIFT" | "FAREWELL_PARTY" | "WEEKEND_TRIP";
+type GroupId = "G1" | "G2" | "G3" | "G4" | "G5" | "G6" | "G7" | "G8" | "G9";
+
+const TASK_LABELS: Record<TaskId, string> = {
+  BIRTHDAY_GIFT: "誕生日プレゼントのサーチヒストリー",
+  FAREWELL_PARTY: "送別会の計画のサーチヒストリー",
+  WEEKEND_TRIP: "休日旅行の計画のサーチヒストリー",
+};
+
+const TASK_ORDERS: TaskId[][] = [
+  ["BIRTHDAY_GIFT", "FAREWELL_PARTY", "WEEKEND_TRIP"],
+  ["FAREWELL_PARTY", "WEEKEND_TRIP", "BIRTHDAY_GIFT"],
+  ["WEEKEND_TRIP", "BIRTHDAY_GIFT", "FAREWELL_PARTY"],
+];
+
+const CONDITION_ORDERS = [
+  ["SUMMARY", "NARRATIVE", "NONE"],
+  ["NARRATIVE", "NONE", "SUMMARY"],
+  ["NONE", "SUMMARY", "NARRATIVE"],
+] as const;
+
+const buildPlan = (tasks: TaskId[], conditions: (typeof CONDITION_ORDERS)[number]) =>
+  tasks.map((taskId, idx) => ({ taskId, condition: conditions[idx] }));
+
+const ASSIGNMENT_PLAN: Record<GroupId, { taskId: TaskId; condition: string }[]> = {
+  G1: buildPlan(TASK_ORDERS[0], CONDITION_ORDERS[0]),
+  G2: buildPlan(TASK_ORDERS[1], CONDITION_ORDERS[0]),
+  G3: buildPlan(TASK_ORDERS[2], CONDITION_ORDERS[0]),
+  G4: buildPlan(TASK_ORDERS[0], CONDITION_ORDERS[1]),
+  G5: buildPlan(TASK_ORDERS[1], CONDITION_ORDERS[1]),
+  G6: buildPlan(TASK_ORDERS[2], CONDITION_ORDERS[1]),
+  G7: buildPlan(TASK_ORDERS[0], CONDITION_ORDERS[2]),
+  G8: buildPlan(TASK_ORDERS[1], CONDITION_ORDERS[2]),
+  G9: buildPlan(TASK_ORDERS[2], CONDITION_ORDERS[2]),
+};
+
 export default function ImpressionsPage() {
   const router = useRouter();
   const [participantId, setParticipantId] = useState("");
+  const [participantGroup, setParticipantGroup] = useState<GroupId>("G1");
   const [q1, setQ1] = useState<string>(ageOptions[0]);
   const [q2, setQ2] = useState<string>(genderOptions[0]);
   const [q3, setQ3] = useState<string[]>([]);
@@ -19,17 +56,31 @@ export default function ImpressionsPage() {
   const [q5, setQ5] = useState("");
   const [q6, setQ6] = useState<number>(0);
   const [q7, setQ7] = useState("");
+  const [q8, setQ8] = useState<TaskId | "">("");
+  const [q9, setQ9] = useState("");
+
+  const q8OptionsInSessionOrder = useMemo(() => {
+    const plan = ASSIGNMENT_PLAN[participantGroup] || ASSIGNMENT_PLAN.G1;
+    return plan.map(({ taskId }) => taskId);
+  }, [participantGroup]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
       const stored = window.sessionStorage.getItem("participantId") || "";
       setParticipantId(stored);
+      const storedGroup =
+        (window.sessionStorage.getItem("participantGroup") as GroupId | null) || "G1";
+      setParticipantGroup(storedGroup);
     }
   }, []);
 
   const handleSubmit = async () => {
     if (!participantId) {
       alert("兵庫県立大学のメールアドレスがありません。ログインからやり直してください。");
+      return;
+    }
+    if (!q8 || !q9.trim()) {
+      alert("Q8およびQ9にすべて回答してください。");
       return;
     }
     try {
@@ -50,6 +101,8 @@ export default function ImpressionsPage() {
             q5,
             q6,
             q7,
+            q8,
+            q9,
           },
         }),
       });
@@ -183,7 +236,7 @@ export default function ImpressionsPage() {
             Q5. 音声対話型検索システムの利用頻度について教えてください
           </p>
           <div className="flex flex-col gap-2 text-sm">
-            {["毎日", "週4〜5回", "週2〜3回", "週1回", "その他", "使ったことがない"].map(
+            {["毎日", "週4〜5回", "週2〜3回", "週1回", "週1回未満", "使ったことがない"].map(
               (label, idx) => (
                 <label key={label} className="flex items-center gap-2">
                   <input
@@ -233,6 +286,41 @@ export default function ImpressionsPage() {
           <Textarea
             value={q7}
             onChange={(e) => setQ7(e.target.value)}
+            placeholder="自由記述"
+            rows={6}
+          />
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-sm font-semibold">
+            Q8. 実験2回目において、音声での検索を最も始めやすかったと感じたサーチヒストリー音声はどれですか？
+          </p>
+          <p className="text-xs text-muted-foreground">
+            以下は、実験2回目でトピックが提示された順番です。
+          </p>
+          <div className="flex flex-col gap-2 text-sm">
+            {q8OptionsInSessionOrder.map((taskId) => (
+              <label key={taskId} className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="q8"
+                  value={taskId}
+                  checked={q8 === taskId}
+                  onChange={() => setQ8(taskId)}
+                />
+                {TASK_LABELS[taskId]}
+              </label>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-sm font-semibold">
+            Q9. Q8で答えた理由を記述してください
+          </p>
+          <Textarea
+            value={q9}
+            onChange={(e) => setQ9(e.target.value)}
             placeholder="自由記述"
             rows={6}
           />

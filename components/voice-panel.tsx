@@ -74,8 +74,12 @@ export function VoicePanel({
       await startSession(initialMessages);
     } catch (error) {
       console.error("Failed to start session:", error);
+      const detail =
+        error instanceof Error && error.message
+          ? error.message
+          : "不明なエラー";
       toast.error(
-        "対話を開始できませんでした。ブラウザでこのページを再読み込みしたうえで、もう一度「対話開始」をお試しください。"
+        `対話を開始できませんでした（${detail}）。ブラウザでこのページを再読み込みしたうえで、もう一度「対話開始」をお試しください。`
       );
     }
   };

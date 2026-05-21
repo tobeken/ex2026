@@ -154,14 +154,17 @@ export default function useWebRTCAudioSession(
   }
 
   function configureDataChannel(dataChannel: RTCDataChannel) {
-    // Send session update
     const sessionUpdate = {
       type: "session.update",
       session: {
-        modalities: ["text", "audio"],
+        type: "realtime",
         tools: tools || [],
-        input_audio_transcription: {
-          model: "whisper-1",
+        audio: {
+          input: {
+            transcription: {
+              model: "whisper-1",
+            },
+          },
         },
       },
     };
@@ -341,6 +344,7 @@ export default function useWebRTCAudioSession(
         /**
          * Streaming AI transcripts (assistant partial)
          */
+        case "response.output_audio_transcript.delta":
         case "response.audio_transcript.delta": {
           const startedAt = assistantSpeechStartRef.current ?? Date.now();
           if (!assistantSpeechStartRef.current) {
@@ -393,6 +397,7 @@ export default function useWebRTCAudioSession(
         /**
          * Mark the last assistant message as final
          */
+        case "response.output_audio_transcript.done":
         case "response.audio_transcript.done": {
           const endedAt = assistantAudioEndRef.current ?? Date.now();
           const text = assistantTextRef.current || "";
@@ -473,20 +478,23 @@ export default function useWebRTCAudioSession(
    * Fetch ephemeral token from your Next.js endpoint
    */
   async function getEphemeralToken() {
-    try {
-      const response = await fetch("/api/session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-      });
-      if (!response.ok) {
-        throw new Error(`Failed to get ephemeral token: ${response.status}`);
-      }
-      const data = await response.json();
-      return data.client_secret.value;
-    } catch (err) {
-      console.error("getEphemeralToken error:", err);
-      throw err;
+    const response = await fetch("/api/session", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      const detail =
+        typeof data?.detail === "string"
+          ? data.detail
+          : data?.error || `HTTP ${response.status}`;
+      throw new Error(`Ephemeral token failed: ${detail}`);
     }
+    const token = data?.value ?? data?.client_secret?.value;
+    if (!token) {
+      throw new Error("Ephemeral token missing in /api/session response");
+    }
+    return token as string;
   }
 
   /**
@@ -623,7 +631,7 @@ export default function useWebRTCAudioSession(
       };
 
       // Data channel for transcripts
-      const dataChannel = pc.createDataChannel("response");
+      const dataChannel = pc.createDataChannel("oai-events");
       dataChannelRef.current = dataChannel;
 
       dataChannel.onopen = () => {
@@ -655,10 +663,8 @@ export default function useWebRTCAudioSession(
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      // Send SDP offer to OpenAI Realtime
-      const baseUrl = "https://api.openai.com/v1/realtime";
-      const model = "gpt-realtime-mini-2025-12-15";
-      const response = await fetch(`${baseUrl}?model=${model}&voice=${voice}`, {
+      // GA Realtime WebRTC: session config is bound to the ephemeral token from /api/session
+      const response = await fetch("https://api.openai.com/v1/realtime/calls", {
         method: "POST",
         body: offer.sdp,
         headers: {
